@@ -9,6 +9,7 @@ from aioshelly.common import ConnectionOptions
 from aioshelly.const import RPC_GENERATIONS
 from aioshelly.exceptions import (
     DeviceConnectionError,
+    FirmwareUnsupported,
     InvalidAuthError,
     MacAddressMismatchError,
 )
@@ -35,6 +36,7 @@ from .const import (
     DATA_CONFIG_ENTRY,
     DEFAULT_COAP_PORT,
     DOMAIN,
+    FIRMWARE_UNSUPPORTED_ISSUE_ID,
     LOGGER,
     PUSH_UPDATE_ISSUE_ID,
 )
@@ -197,6 +199,26 @@ async def _async_setup_block_entry(hass: HomeAssistant, entry: ConfigEntry) -> b
             raise ConfigEntryNotReady(repr(err)) from err
         except InvalidAuthError as err:
             raise ConfigEntryAuthFailed(repr(err)) from err
+        except FirmwareUnsupported:
+            LOGGER.debug(
+                "Creating issue %s",
+                FIRMWARE_UNSUPPORTED_ISSUE_ID.format(unique=entry.unique_id),
+            )
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                FIRMWARE_UNSUPPORTED_ISSUE_ID.format(unique=entry.unique_id),
+                is_fixable=False,
+                is_persistent=False,
+                severity=ir.IssueSeverity.ERROR,
+                learn_more_url="https://www.home-assistant.io/integrations/shelly/#known-issues-and-limitations",
+                translation_key="firmware_unsupported",
+                translation_placeholders={
+                    "device_name": entry.title,
+                    "ip_address": entry.data[CONF_HOST],
+                },
+            )
+            return False
 
         await _async_block_device_setup()
     elif sleep_period is None or device_entry is None:
@@ -281,6 +303,26 @@ async def _async_setup_rpc_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
             raise ConfigEntryNotReady(repr(err)) from err
         except InvalidAuthError as err:
             raise ConfigEntryAuthFailed(repr(err)) from err
+        except FirmwareUnsupported:
+            LOGGER.debug(
+                "Creating issue %s",
+                FIRMWARE_UNSUPPORTED_ISSUE_ID.format(unique=entry.unique_id),
+            )
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                FIRMWARE_UNSUPPORTED_ISSUE_ID.format(unique=entry.unique_id),
+                is_fixable=False,
+                is_persistent=False,
+                severity=ir.IssueSeverity.ERROR,
+                learn_more_url="https://www.home-assistant.io/integrations/shelly/#known-issues-and-limitations",
+                translation_key="firmware_unsupported",
+                translation_placeholders={
+                    "device_name": entry.title,
+                    "ip_address": entry.data[CONF_HOST],
+                },
+            )
+            return False
 
         await _async_rpc_device_setup()
     elif sleep_period is None or device_entry is None:
