@@ -278,6 +278,10 @@ async def _async_setup_rpc_entry(hass: HomeAssistant, entry: ConfigEntry) -> boo
         shelly_entry_data.rpc = ShellyRpcCoordinator(hass, entry, device)
         shelly_entry_data.rpc.async_setup()
 
+        LOGGER.info(device.config)
+
+        LOGGER.info(hass.config.internal_url)
+
         platforms = RPC_SLEEPING_PLATFORMS
 
         if not entry.data.get(CONF_SLEEP_PERIOD):
