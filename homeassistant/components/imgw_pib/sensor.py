@@ -97,3 +97,9 @@ class ImgwPibSensorEntity(
         """Handle updated data from the coordinator."""
         self._attr_native_value = self.entity_description.value(self.coordinator.data)
         self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        sensor_value = self.entity_description.value(self.coordinator.data)
+        return super().available and sensor_value is not None

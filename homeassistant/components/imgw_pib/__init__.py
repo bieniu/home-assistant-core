@@ -23,7 +23,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up IMGW-PIB from a config entry."""
     station_id: str = entry.data[CONF_STATION_ID]
 
-    _LOGGER.debug("Using hydrological station ID: %d", station_id)
+    _LOGGER.debug("Using hydrological station ID: %s", station_id)
 
     client_session = async_get_clientsession(hass)
 
