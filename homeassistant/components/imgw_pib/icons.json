@@ -1,0 +1,12 @@
+{
+  "entity": {
+    "sensor": {
+      "water_level": {
+        "default": "mdi:arrow-up-down"
+      },
+      "water_temperature": {
+        "default": "mdi:thermometer-water"
+      }
+    }
+  }
+}
