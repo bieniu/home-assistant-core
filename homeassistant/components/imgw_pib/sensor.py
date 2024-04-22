@@ -65,7 +65,7 @@ async def async_setup_entry(
         [
             ImgwPibSensorEntity(coordinator, description)
             for description in SENSOR_TYPES
-            if getattr(coordinator.data, description.key) is not None
+            if getattr(coordinator.data, description.key).value is not None
         ]
     )
 
