@@ -69,12 +69,11 @@ class ImgwPibFlowHandler(ConfigFlow, domain=DOMAIN):
         client_session = async_get_clientsession(self.hass)
 
         imgwpib = await ImgwPib.create(client_session)
-
-        hydrological_stations = imgwpib.hydrological_stations
+        await imgwpib.update_hydrological_stations()
 
         options: list[SelectOptionDict] = [
             SelectOptionDict(value=station_id, label=station_name)
-            for station_id, station_name in hydrological_stations.items()
+            for station_id, station_name in imgwpib.hydrological_stations.items()
         ]
 
         schema: vol.Schema = vol.Schema(
