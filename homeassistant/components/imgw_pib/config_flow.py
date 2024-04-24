@@ -83,7 +83,7 @@ class ImgwPibFlowHandler(ConfigFlow, domain=DOMAIN):
                         options=options,
                         multiple=False,
                         sort=True,
-                        mode=SelectSelectorMode.LIST,
+                        mode=SelectSelectorMode.DROPDOWN,
                     ),
                 )
             }
