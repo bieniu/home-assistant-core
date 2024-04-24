@@ -35,7 +35,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     hydrological_data = await imgwpib.get_hydrological_data()
 
-    return {"title": f"{hydrological_data.station} ({hydrological_data.river})"}
+    return {"title": f"{hydrological_data.river} ({hydrological_data.station})"}
 
 
 class ImgwPibFlowHandler(ConfigFlow, domain=DOMAIN):
