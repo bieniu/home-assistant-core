@@ -1,6 +1,6 @@
 """Test the IMGW-PIB config flow."""
 
-from unittest.mock import AsyncMock, Mock, PropertyMock, patch
+from unittest.mock import AsyncMock, PropertyMock, patch
 
 from imgw_pib.exceptions import ApiError
 
@@ -9,12 +9,7 @@ from homeassistant.components.imgw_pib.const import CONF_STATION_ID, DOMAIN
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-HYDROLOGICAL_STATIONS = {"123": "Station Name"}
-HYDROLOGICAL_DATA = Mock(
-    station="Station Name",
-    river="River Name",
-    station_id="123",
-)
+from . import HYDROLOGICAL_DATA, HYDROLOGICAL_STATIONS
 
 
 async def test_form(hass: HomeAssistant, mock_setup_entry: AsyncMock) -> None:
