@@ -93,9 +93,3 @@ class ImgwPibBinarySensorEntity(
         """Handle updated data from the coordinator."""
         self._attr_is_on = self.entity_description.value(self.coordinator.data)
         self.async_write_ha_state()
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        binary_sensor_value = self.entity_description.value(self.coordinator.data)
-        return super().available and binary_sensor_value is not None
