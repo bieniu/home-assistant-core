@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from aiohttp import ClientError
 from imgw_pib import ImgwPib
 from imgw_pib.exceptions import ApiError
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     SelectOptionDict,
@@ -56,10 +56,8 @@ class ImgwPibFlowHandler(ConfigFlow, domain=DOMAIN):
             self._abort_if_unique_id_configured()
             try:
                 info = await validate_input(self.hass, user_input)
-            except CannotConnect:
+            except (ClientError, TimeoutError, ApiError):
                 errors["base"] = "cannot_connect"
-            except ApiError:
-                errors["base"] = "api_error"
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
@@ -90,7 +88,3 @@ class ImgwPibFlowHandler(ConfigFlow, domain=DOMAIN):
         )
 
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
-
-
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""
