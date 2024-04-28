@@ -34,7 +34,9 @@ class ImgwPibDataUpdateCoordinator(DataUpdateCoordinator[HydrologicalData]):
             configuration_url=f"https://hydro.imgw.pl/#/station/hydro/{station_id}",
         )
 
-        super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=timedelta(hours=1))
+        super().__init__(
+            hass, _LOGGER, name=DOMAIN, update_interval=timedelta(minutes=30)
+        )
 
     async def _async_update_data(self) -> HydrologicalData:
         """Update data via internal method."""
