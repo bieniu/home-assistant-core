@@ -9,7 +9,6 @@
     },
     "error": {
       "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "api_error": "IMGW-PIB API error, try again later.",
       "unknown": "[%key:common::config_flow::error::unknown%]"
     },
     "abort": {
