@@ -69,8 +69,18 @@ async def test_form_no_station_list(hass: HomeAssistant, exc: Exception) -> None
     assert result["reason"] == "no_station_list"
 
 
-@pytest.mark.parametrize("exc", [ApiError("API Error"), ClientError, TimeoutError])
-async def test_form_with_exceptions(hass: HomeAssistant, exc: Exception) -> None:
+@pytest.mark.parametrize(
+    ("exc", "base_error"),
+    [
+        (Exception, "unknown"),
+        (ApiError("API Error"), "cannot_connect"),
+        (ClientError, "cannot_connect"),
+        (TimeoutError, "cannot_connect"),
+    ],
+)
+async def test_form_with_exceptions(
+    hass: HomeAssistant, exc: Exception, base_error: str
+) -> None:
     """Test we get the form."""
     with (
         patch("homeassistant.components.imgw_pib.ImgwPib.update_hydrological_stations"),
@@ -88,8 +98,14 @@ async def test_form_with_exceptions(hass: HomeAssistant, exc: Exception) -> None
 
     with (
         patch("homeassistant.components.imgw_pib.ImgwPib.update_hydrological_stations"),
+        patch("homeassistant.components.imgw_pib.ImgwPib._update_hydrological_details"),
         patch(
-            "homeassistant.components.imgw_pib.ImgwPib._update_hydrological_details",
+            "homeassistant.components.imgw_pib.ImgwPib.hydrological_stations",
+            new_callable=PropertyMock,
+            return_value=HYDROLOGICAL_STATIONS,
+        ),
+        patch(
+            "homeassistant.components.imgw_pib.ImgwPib.get_hydrological_data",
             side_effect=exc,
         ),
     ):
@@ -100,4 +116,4 @@ async def test_form_with_exceptions(hass: HomeAssistant, exc: Exception) -> None
         await hass.async_block_till_done()
 
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"] == {"base": "cannot_connect"}
+    assert result["errors"] == {"base": base_error}
