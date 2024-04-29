@@ -55,17 +55,49 @@ async def test_form(hass: HomeAssistant, mock_setup_entry: AsyncMock) -> None:
     assert len(mock_setup_entry.mock_calls) == 1
 
 
-@pytest.mark.parametrize(
-    "exception", [ApiError("API Error"), ClientError, TimeoutError]
-)
-async def test_form_no_station_list(hass: HomeAssistant, exception: Exception) -> None:
+@pytest.mark.parametrize("exc", [ApiError("API Error"), ClientError, TimeoutError])
+async def test_form_no_station_list(hass: HomeAssistant, exc: Exception) -> None:
     """Test aborting the flow when we cannot get the list of hydrological stations."""
     with patch(
         "homeassistant.components.imgw_pib.ImgwPib.update_hydrological_stations",
-        side_effect=exception,
+        side_effect=exc,
     ):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "no_station_list"
+
+
+@pytest.mark.parametrize("exc", [ApiError("API Error"), ClientError, TimeoutError])
+async def test_form_with_exceptions(hass: HomeAssistant, exc: Exception) -> None:
+    """Test we get the form."""
+    with (
+        patch("homeassistant.components.imgw_pib.ImgwPib.update_hydrological_stations"),
+        patch(
+            "homeassistant.components.imgw_pib.ImgwPib.hydrological_stations",
+            new_callable=PropertyMock,
+            return_value=HYDROLOGICAL_STATIONS,
+        ),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {}
+
+    with (
+        patch("homeassistant.components.imgw_pib.ImgwPib.update_hydrological_stations"),
+        patch(
+            "homeassistant.components.imgw_pib.ImgwPib._update_hydrological_details",
+            side_effect=exc,
+        ),
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_STATION_ID: "123"},
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"base": "cannot_connect"}
