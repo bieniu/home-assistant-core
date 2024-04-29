@@ -2,6 +2,7 @@
 
 from unittest.mock import patch
 
+from imgw_pib import ApiError
 from syrupy import SnapshotAssertion
 
 from homeassistant.components.imgw_pib.const import UPDATE_INTERVAL
@@ -39,7 +40,7 @@ async def test_availability(hass: HomeAssistant) -> None:
 
     with patch(
         "homeassistant.components.imgw_pib.ImgwPib.get_hydrological_data",
-        side_effect=ConnectionError,
+        side_effect=ApiError("API Error"),
     ):
         async_fire_time_changed(hass, utcnow() + UPDATE_INTERVAL)
         await hass.async_block_till_done()
