@@ -2,6 +2,10 @@
 
 from unittest.mock import AsyncMock, PropertyMock, patch
 
+from aiohttp import ClientError
+from imgw_pib.exceptions import ApiError
+import pytest
+
 from homeassistant import config_entries
 from homeassistant.components.imgw_pib.const import CONF_STATION_ID, DOMAIN
 from homeassistant.core import HomeAssistant
@@ -49,3 +53,19 @@ async def test_form(hass: HomeAssistant, mock_setup_entry: AsyncMock) -> None:
     assert result["title"] == "River Name (Station Name)"
     assert result["data"] == {CONF_STATION_ID: "123"}
     assert len(mock_setup_entry.mock_calls) == 1
+
+
+@pytest.mark.parametrize(
+    "exception", [ApiError("API Error"), ClientError, TimeoutError]
+)
+async def test_form_no_station_list(hass: HomeAssistant, exception: Exception) -> None:
+    """Test aborting the flow when we cannot get the list of hydrological stations."""
+    with patch(
+        "homeassistant.components.imgw_pib.ImgwPib.update_hydrological_stations",
+        side_effect=exception,
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "no_station_list"
