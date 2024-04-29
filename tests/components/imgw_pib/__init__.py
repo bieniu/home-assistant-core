@@ -9,7 +9,7 @@ from homeassistant.components.imgw_pib.const import DOMAIN
 
 from tests.common import MockConfigEntry
 
-HYDROLOGICAL_STATIONS = {"123": "Station Name"}
+HYDROLOGICAL_STATIONS = {"123": "River Name (Station Name)"}
 HYDROLOGICAL_DATA = HydrologicalData(
     station="Station Name",
     river="River Name",
