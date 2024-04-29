@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import logging
 
+from aiohttp import ClientError
 from imgw_pib import ImgwPib
+from imgw_pib.exceptions import ApiError
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import CONF_STATION_ID, DOMAIN
@@ -27,7 +30,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     client_session = async_get_clientsession(hass)
 
-    imgwpib = await ImgwPib.create(client_session, hydrological_station_id=station_id)
+    try:
+        imgwpib = await ImgwPib.create(
+            client_session, hydrological_station_id=station_id
+        )
+    except (ClientError, TimeoutError, ApiError) as err:
+        raise ConfigEntryNotReady from err
 
     coordinator = ImgwPibDataUpdateCoordinator(hass, imgwpib, station_id)
     await coordinator.async_config_entry_first_refresh()

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from aiohttp import ClientError
+from aiohttp import ClientError, ClientSession
 from imgw_pib import ImgwPib
 from imgw_pib.exceptions import ApiError
 import voluptuous as vol
@@ -25,14 +25,11 @@ from .const import CONF_STATION_ID, DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
-async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
+async def validate_input(
+    hass: HomeAssistant, client_session: ClientSession, station_id: str
+) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
-    client_session = async_get_clientsession(hass)
-
-    station_id = data[CONF_STATION_ID]
-
     imgwpib = await ImgwPib.create(client_session, hydrological_station_id=station_id)
-
     hydrological_data = await imgwpib.get_hydrological_data()
 
     return {"title": f"{hydrological_data.river} ({hydrological_data.station})"}
@@ -49,13 +46,16 @@ class ImgwPibFlowHandler(ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
+        client_session = async_get_clientsession(self.hass)
+
         if user_input is not None:
-            await self.async_set_unique_id(
-                user_input[CONF_STATION_ID], raise_on_progress=False
-            )
+            station_id = user_input[CONF_STATION_ID]
+
+            await self.async_set_unique_id(station_id, raise_on_progress=False)
             self._abort_if_unique_id_configured()
+
             try:
-                info = await validate_input(self.hass, user_input)
+                info = await validate_input(self.hass, client_session, station_id)
             except (ClientError, TimeoutError, ApiError):
                 errors["base"] = "cannot_connect"
             except Exception:  # pylint: disable=broad-except
@@ -64,10 +64,11 @@ class ImgwPibFlowHandler(ConfigFlow, domain=DOMAIN):
             else:
                 return self.async_create_entry(title=info["title"], data=user_input)
 
-        client_session = async_get_clientsession(self.hass)
-
-        imgwpib = await ImgwPib.create(client_session)
-        await imgwpib.update_hydrological_stations()
+        try:
+            imgwpib = await ImgwPib.create(client_session)
+            await imgwpib.update_hydrological_stations()
+        except (ClientError, TimeoutError, ApiError):
+            return self.async_abort(reason="no_station_list")
 
         options: list[SelectOptionDict] = [
             SelectOptionDict(value=station_id, label=station_name)
