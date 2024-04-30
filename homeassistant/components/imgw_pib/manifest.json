@@ -7,7 +7,7 @@
   "documentation": "https://www.home-assistant.io/integrations/imgw_pib",
   "homekit": {},
   "iot_class": "cloud_polling",
-  "requirements": ["imgw_pib==0.0.5"],
+  "requirements": ["imgw_pib==1.0.0"],
   "ssdp": [],
   "zeroconf": []
 }
