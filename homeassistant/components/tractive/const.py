@@ -35,3 +35,6 @@ SWITCH_KEY_MAP = {
     ATTR_BUZZER: "buzzer_control",
     ATTR_LED: "led_control",
 }
+
+RETRIES = 5
+DEFAULT_SLEEP_TIME = 2

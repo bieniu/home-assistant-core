@@ -161,3 +161,26 @@ async def test_server_unavailable(
     await hass.async_block_till_done()
 
     assert hass.states.get(entity_id).state != STATE_UNAVAILABLE
+
+
+@pytest.mark.parametrize("method", ["details", "hw_info", "pos_report"])
+async def test_too_many_requests(
+    hass: HomeAssistant,
+    mock_tractive_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+    method: str,
+) -> None:
+    """Test 'too many requests' error."""
+    getattr(
+        mock_tractive_client.tracker.return_value, method
+    ).return_value = b"Too Many Requests"
+
+    with patch("asyncio.sleep") as mock_sleep:
+        await init_integration(hass, mock_config_entry)
+
+    assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
+    assert mock_sleep.call_count == 5
+    assert mock_sleep.call_args_list[0][0][0] == 2
+    assert mock_sleep.call_args_list[1][0][0] == 4
+    assert mock_sleep.call_args_list[2][0][0] == 8
+    assert mock_sleep.call_args_list[3][0][0] == 16

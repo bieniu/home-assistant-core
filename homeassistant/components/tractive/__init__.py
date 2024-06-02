@@ -34,7 +34,9 @@ from .const import (
     ATTR_SLEEP_LABEL,
     ATTR_TRACKER_STATE,
     CLIENT_ID,
+    DEFAULT_SLEEP_TIME,
     RECONNECT_INTERVAL,
+    RETRIES,
     SERVER_UNAVAILABLE,
     SWITCH_KEY_MAP,
     TRACKER_HARDWARE_STATUS_UPDATED,
@@ -127,6 +129,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: TractiveConfigEntry) -> 
 async def _generate_trackables(
     client: aiotractive.Tractive,
     trackable: aiotractive.trackable_object.TrackableObject,
+    attempt: int = 0,
 ) -> Trackables | None:
     """Generate trackables."""
     trackable_data = await trackable.details()
@@ -147,6 +150,18 @@ async def _generate_trackables(
     tracker_details, hw_info, pos_report = await asyncio.gather(
         tracker.details(), tracker.hw_info(), tracker.pos_report()
     )
+
+    for item in (tracker_details, hw_info, pos_report):
+        if isinstance(item, bytes) and "Too Many Requests" in str(item):
+            attempt += 1
+            if attempt >= RETRIES:
+                raise ConfigEntryNotReady("Tractive API returns 'Too Many Requests'")
+
+            sleep_time = DEFAULT_SLEEP_TIME**attempt
+            _LOGGER.error("Too many requests, retrying in %s seconds", sleep_time)
+            await asyncio.sleep(sleep_time)
+
+            return await _generate_trackables(client, trackable, attempt)
 
     if not tracker_details.get("_id"):
         raise ConfigEntryNotReady(
