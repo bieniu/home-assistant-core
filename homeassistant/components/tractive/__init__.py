@@ -152,7 +152,11 @@ async def _generate_trackables(
     )
 
     for item in (tracker_details, hw_info, pos_report):
-        if isinstance(item, bytes) and "Too Many Requests" in str(item):
+        _LOGGER.debug(" Tractive trackable: %s", item)
+        if (
+            isinstance(item, dict)
+            and item.get("message") == "Rate limit for this resource exceeded."
+        ):
             attempt += 1
             if attempt >= RETRIES:
                 raise ConfigEntryNotReady("Tractive API returns 'Too Many Requests'")
