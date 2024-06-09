@@ -153,16 +153,17 @@ async def _generate_trackables(
 
     for item in (tracker_details, hw_info, pos_report):
         _LOGGER.debug(" Tractive trackable: %s", item)
-        if (
-            isinstance(item, dict)
-            and item.get("message") == "Rate limit for this resource exceeded."
-        ):
+        if item.get("message") == "Rate limit for this resource exceeded.":
             attempt += 1
             if attempt >= RETRIES:
                 raise ConfigEntryNotReady("Tractive API returns 'Too Many Requests'")
 
             sleep_time = DEFAULT_SLEEP_TIME**attempt
-            _LOGGER.error("Too many requests, retrying in %s seconds", sleep_time)
+            _LOGGER.info(
+                "Too many requests, retrying in %s seconds, attempt %s",
+                sleep_time,
+                attempt,
+            )
             await asyncio.sleep(sleep_time)
 
             return await _generate_trackables(client, trackable, attempt)
