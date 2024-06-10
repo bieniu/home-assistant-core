@@ -132,6 +132,7 @@ async def _generate_trackables(
     attempt: int = 0,
 ) -> Trackables | None:
     """Generate trackables."""
+    _LOGGER.debug("Generate trackables, attempt: %s", attempt)
     trackable_data = await trackable.details()
 
     # Check that the pet has tracker linked.
@@ -151,22 +152,21 @@ async def _generate_trackables(
         tracker.details(), tracker.hw_info(), tracker.pos_report()
     )
 
-    for item in (tracker_details, hw_info, pos_report):
-        _LOGGER.debug(" Tractive trackable: %s", item)
-        if item.get("message") == "Rate limit for this resource exceeded.":
-            attempt += 1
-            if attempt >= RETRIES:
-                raise ConfigEntryNotReady("Tractive API returns 'Too Many Requests'")
+    if any(
+        item.get("message") == "Rate limit for this resource exceeded."
+        for item in (tracker_details, hw_info, pos_report)
+    ):
+        attempt += 1
 
-            sleep_time = DEFAULT_SLEEP_TIME**attempt
-            _LOGGER.info(
-                "Too many requests, retrying in %s seconds, attempt %s",
-                sleep_time,
-                attempt,
-            )
-            await asyncio.sleep(sleep_time)
+        if attempt >= RETRIES:
+            raise ConfigEntryNotReady("Tractive API returns 'Too Many Requests'")
 
-            return await _generate_trackables(client, trackable, attempt)
+        sleep_time = DEFAULT_SLEEP_TIME**attempt
+        _LOGGER.debug("Too many requests, retrying in %s seconds", sleep_time)
+
+        await asyncio.sleep(sleep_time)
+
+        return await _generate_trackables(client, trackable, attempt)
 
     if not tracker_details.get("_id"):
         raise ConfigEntryNotReady(

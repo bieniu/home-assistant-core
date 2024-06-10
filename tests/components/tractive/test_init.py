@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 
 from . import init_integration
 
-from tests.common import MockConfigEntry
+from tests.common import MockConfigEntry, load_json_object_fixture
 
 
 async def test_setup_entry(
@@ -163,24 +163,41 @@ async def test_server_unavailable(
     assert hass.states.get(entity_id).state != STATE_UNAVAILABLE
 
 
-@pytest.mark.parametrize("method", ["details", "hw_info", "pos_report"])
-async def test_too_many_requests(
+async def test_too_many_requests_fail(
     hass: HomeAssistant,
     mock_tractive_client: AsyncMock,
     mock_config_entry: MockConfigEntry,
-    method: str,
 ) -> None:
     """Test 'too many requests' error."""
-    getattr(
-        mock_tractive_client.tracker.return_value, method
-    ).return_value = b"Too Many Requests"
+    mock_tractive_client.tracker.return_value.details.return_value = {
+        "message": "Rate limit for this resource exceeded."
+    }
 
-    with patch("asyncio.sleep") as mock_sleep:
+    with patch("homeassistant.components.tractive.asyncio.sleep") as mock_sleep:
         await init_integration(hass, mock_config_entry)
 
     assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
-    assert mock_sleep.call_count == 5
     assert mock_sleep.call_args_list[0][0][0] == 2
     assert mock_sleep.call_args_list[1][0][0] == 4
     assert mock_sleep.call_args_list[2][0][0] == 8
     assert mock_sleep.call_args_list[3][0][0] == 16
+
+
+async def test_too_many_requests_success(
+    hass: HomeAssistant,
+    mock_tractive_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test 'too many requests' error."""
+    tracker_details = load_json_object_fixture("tracker_details.json", DOMAIN)
+
+    mock_tractive_client.tracker.return_value.details.side_effect = [
+        {"message": "Rate limit for this resource exceeded."},
+        {"message": "Rate limit for this resource exceeded."},
+        tracker_details,
+    ]
+
+    with patch("homeassistant.components.tractive.asyncio.sleep"):
+        await init_integration(hass, mock_config_entry)
+
+    assert mock_config_entry.state is ConfigEntryState.LOADED
