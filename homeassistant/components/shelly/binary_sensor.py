@@ -8,17 +8,18 @@ from typing import Final, cast
 from aioshelly.const import RPC_GENERATIONS
 
 from homeassistant.components.binary_sensor import (
+    DOMAIN as BINARY_SENSOR_PLATFORM,
     BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.const import STATE_ON, EntityCategory
+from homeassistant.const import STATE_ON, EntityCategory, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import CONF_SLEEP_PERIOD
-from .coordinator import ShellyConfigEntry
+from .coordinator import ShellyConfigEntry, ShellyRpcCoordinator
 from .entity import (
     BlockEntityDescription,
     RestEntityDescription,
@@ -26,6 +27,7 @@ from .entity import (
     ShellyBlockAttributeEntity,
     ShellyRestAttributeEntity,
     ShellyRpcAttributeEntity,
+    ShellyRpcEntity,
     ShellySleepingBlockAttributeEntity,
     ShellySleepingRpcAttributeEntity,
     async_setup_entry_attribute_entities,
@@ -33,7 +35,10 @@ from .entity import (
     async_setup_entry_rpc,
 )
 from .utils import (
+    async_get_orphaned_virtual_entities,
+    async_remove_shelly_rpc_entities,
     get_device_entry_gen,
+    get_virtual_component_key_ids,
     is_block_momentary_input,
     is_rpc_momentary_input,
 )
@@ -234,6 +239,31 @@ async def async_setup_entry(
                 RpcSleepingBinarySensor,
             )
         else:
+            coordinator = config_entry.runtime_data.rpc
+            assert coordinator
+
+            virtual_binary_sensor_key_ids = get_virtual_component_key_ids(
+                coordinator.device.config, Platform.BINARY_SENSOR
+            )
+            entities = [
+                RpcVirtualBinarySensor(coordinator, id_)
+                for id_ in virtual_binary_sensor_key_ids
+            ]
+
+            if orphaned_entities := async_get_orphaned_virtual_entities(
+                hass,
+                config_entry.entry_id,
+                BINARY_SENSOR_PLATFORM,
+                "boolean",
+                virtual_binary_sensor_key_ids,
+            ):
+                async_remove_shelly_rpc_entities(
+                    hass, BINARY_SENSOR_PLATFORM, coordinator.mac, orphaned_entities
+                )
+
+            if entities:
+                async_add_entities(entities)
+
             async_setup_entry_rpc(
                 hass, config_entry, async_add_entities, RPC_SENSORS, RpcBinarySensor
             )
@@ -295,6 +325,20 @@ class RpcBinarySensor(ShellyRpcAttributeEntity, BinarySensorEntity):
     def is_on(self) -> bool:
         """Return true if RPC sensor state is on."""
         return bool(self.attribute_value)
+
+
+class RpcVirtualBinarySensor(ShellyRpcEntity, BinarySensorEntity):
+    """Represent a RPC virtual binary sensor entity."""
+
+    def __init__(self, coordinator: ShellyRpcCoordinator, id_: int) -> None:
+        """Initialize relay switch."""
+        super().__init__(coordinator, f"boolean:{id_}")
+        self._id = id_
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if RPC sensor state is on."""
+        return bool(self.status["value"])
 
 
 class BlockSleepingBinarySensor(

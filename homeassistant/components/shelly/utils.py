@@ -515,6 +515,12 @@ def get_virtual_component_key_ids(
             for k, v in config.items()
             if k.startswith("boolean:") and v["meta"]["ui"]["view"] == "toggle"
         )
+    elif platform is Platform.BINARY_SENSOR:
+        ids.extend(
+            int(k.split(":")[1])
+            for k, v in config.items()
+            if k.startswith("boolean:") and v["meta"]["ui"]["view"] == "label"
+        )
 
     return ids
 
