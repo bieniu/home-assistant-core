@@ -24,7 +24,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity_registry import RegistryEntry
 
 from .const import CONF_SLEEP_PERIOD, LOGGER
-from .coordinator import ShellyBlockCoordinator, ShellyConfigEntry
+from .coordinator import ShellyBlockCoordinator, ShellyConfigEntry, ShellyRpcCoordinator
 from .entity import (
     BlockEntityDescription,
     RpcEntityDescription,
@@ -75,6 +75,7 @@ RPC_NUMBERS: Final = {
         key="number",
         sub_key="value",
         has_entity_name=True,
+        unit=lambda config, key: config[key]["meta"]["ui"]["unit"],
     ),
 }
 
@@ -179,6 +180,21 @@ class RpcNumber(ShellyRpcAttributeEntity, NumberEntity):
     """Represent a RPC number entity."""
 
     entity_description: RpcNumberDescription
+
+    def __init__(
+        self,
+        coordinator: ShellyRpcCoordinator,
+        key: str,
+        attribute: str,
+        description: RpcNumberDescription,
+    ) -> None:
+        """Initialize sensor."""
+        super().__init__(coordinator, key, attribute, description)
+
+        if callable(description.unit):
+            self._attr_native_unit_of_measurement = description.unit(
+                coordinator.device.config, key
+            )
 
     @property
     def native_value(self) -> float | None:
