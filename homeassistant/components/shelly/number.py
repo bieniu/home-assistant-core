@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, cast
 
@@ -52,6 +53,10 @@ class BlockNumberDescription(BlockEntityDescription, NumberEntityDescription):
 class RpcNumberDescription(RpcEntityDescription, NumberEntityDescription):
     """Class to describe a RPC number entity."""
 
+    max_fn: Callable[[dict], float] | None = None
+    min_fn: Callable[[dict], float] | None = None
+    step_fn: Callable[[dict], float] | None = None
+
 
 NUMBERS: dict[tuple[str, str], BlockNumberDescription] = {
     ("device", "valvePos"): BlockNumberDescription(
@@ -75,7 +80,11 @@ RPC_NUMBERS: Final = {
         key="number",
         sub_key="value",
         has_entity_name=True,
-        unit=lambda config, key: config[key]["meta"]["ui"]["unit"],
+        max_fn=lambda config: config["max"],
+        min_fn=lambda config: config["min"],
+        mode=NumberMode.BOX,
+        step_fn=lambda config: config["meta"]["ui"]["step"],
+        unit=lambda config: config["meta"]["ui"]["unit"],
     ),
 }
 
@@ -193,8 +202,18 @@ class RpcNumber(ShellyRpcAttributeEntity, NumberEntity):
 
         if callable(description.unit):
             self._attr_native_unit_of_measurement = description.unit(
-                coordinator.device.config, key
+                coordinator.device.config[key]
             )
+        if callable(description.max_fn):
+            self._attr_native_max_value = description.max_fn(
+                coordinator.device.config[key]
+            )
+        if callable(description.min_fn):
+            self._attr_native_min_value = description.min_fn(
+                coordinator.device.config[key]
+            )
+        if callable(description.step_fn):
+            self._attr_native_step = description.step_fn(coordinator.device.config[key])
 
     @property
     def native_value(self) -> float | None:

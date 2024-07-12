@@ -1023,7 +1023,7 @@ RPC_SENSORS: Final = {
         key="number",
         sub_key="value",
         has_entity_name=True,
-        unit=lambda config, key: config[key]["meta"]["ui"]["unit"],
+        unit=lambda config: config["meta"]["ui"]["unit"],
     ),
 }
 
@@ -1138,7 +1138,7 @@ class RpcSensor(ShellyRpcAttributeEntity, SensorEntity):
 
         if callable(description.unit):
             self._attr_native_unit_of_measurement = description.unit(
-                coordinator.device.config, key
+                coordinator.device.config[key]
             )
 
     @property
