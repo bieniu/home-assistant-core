@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final, cast
 
@@ -69,6 +70,8 @@ class BlockSensorDescription(BlockEntityDescription, SensorEntityDescription):
 @dataclass(frozen=True, kw_only=True)
 class RpcSensorDescription(RpcEntityDescription, SensorEntityDescription):
     """Class to describe a RPC sensor."""
+
+    unit: Callable[[dict, str], str | None] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -1023,6 +1026,7 @@ RPC_SENSORS: Final = {
         key="number",
         sub_key="value",
         has_entity_name=True,
+        unit=lambda config, key: config[key]["meta"]["ui"]["unit"],
     ),
 }
 
@@ -1124,6 +1128,21 @@ class RpcSensor(ShellyRpcAttributeEntity, SensorEntity):
     """Represent a RPC sensor."""
 
     entity_description: RpcSensorDescription
+
+    def __init__(
+        self,
+        coordinator: ShellyRpcCoordinator,
+        key: str,
+        attribute: str,
+        description: RpcSensorDescription,
+    ) -> None:
+        """Initialize sensor."""
+        super().__init__(coordinator, key, attribute, description)
+
+        if callable(description.unit):
+            self._attr_native_unit_of_measurement = description.unit(
+                coordinator.device.config, key
+            )
 
     @property
     def native_value(self) -> StateType:
