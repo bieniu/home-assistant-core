@@ -77,7 +77,7 @@ async def async_get_config_entry_diagnostics(
             ws_config = rpc_coordinator.device.config["ws"]
             device_settings["ws_outbound_enabled"] = ws_config["enable"]
             if ws_config["enable"]:
-                device_settings["ws_outbound_host_valid"] = bool(
+                device_settings["ws_outbound_server_valid"] = bool(
                     ws_config["server"] == get_rpc_ws_url(hass)
                 )
             device_status = {

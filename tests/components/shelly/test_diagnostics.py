@@ -1,5 +1,6 @@
 """Tests for Shelly diagnostics platform."""
 
+from copy import deepcopy
 from unittest.mock import ANY, Mock, PropertyMock
 
 from aioshelly.ble.const import BLE_SCAN_RESULT_EVENT
@@ -152,6 +153,63 @@ async def test_rpc_config_entry_diagnostics(
             "sw_version": "some fw string",
         },
         "device_settings": {"ws_outbound_enabled": False},
+        "device_status": {
+            "sys": {
+                "available_updates": {
+                    "beta": {"version": "some_beta_version"},
+                    "stable": {"version": "some_beta_version"},
+                },
+                "relay_in_thermostat": True,
+            },
+            "wifi": {"rssi": -63},
+        },
+        "last_error": "DeviceConnectionError()",
+    }
+
+
+@pytest.mark.parametrize(
+    ("ws_outbound_server", "ws_outbound_server_valid"),
+    [("ws://10.10.10.10:8123/api/shelly/ws", True), ("wrong_url", False)],
+)
+async def test_rpc_config_entry_diagnostics_ws_outbound(
+    hass: HomeAssistant,
+    hass_client: ClientSessionGenerator,
+    mock_rpc_device: Mock,
+    monkeypatch: pytest.MonkeyPatch,
+    ws_outbound_server: str,
+    ws_outbound_server_valid: bool,
+) -> None:
+    """Test config entry diagnostics for rpc device with websocket outbound."""
+    config = deepcopy(mock_rpc_device.config)
+    config["ws"] = {"enable": True, "server": ws_outbound_server}
+    monkeypatch.setattr(mock_rpc_device, "config", config)
+
+    await init_integration(hass, 2, sleep_period=60)
+
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    entry_dict = entry.as_dict()
+    entry_dict["data"].update(
+        {key: REDACTED for key in TO_REDACT if key in entry_dict["data"]}
+    )
+
+    type(mock_rpc_device).last_error = PropertyMock(
+        return_value=DeviceConnectionError()
+    )
+
+    result = await get_diagnostics_for_config_entry(hass, hass_client, entry)
+
+    assert result == {
+        "entry": entry_dict,
+        "bluetooth": "not initialized",
+        "device_info": {
+            "name": "Test name",
+            "model": MODEL_25,
+            "sw_version": "some fw string",
+        },
+        "device_settings": {
+            "ws_outbound_enabled": True,
+            "ws_outbound_server_valid": ws_outbound_server_valid,
+        },
         "device_status": {
             "sys": {
                 "available_updates": {
