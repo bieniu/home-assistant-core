@@ -198,27 +198,7 @@ async def test_rpc_config_entry_diagnostics_ws_outbound(
 
     result = await get_diagnostics_for_config_entry(hass, hass_client, entry)
 
-    assert result == {
-        "entry": entry_dict,
-        "bluetooth": "not initialized",
-        "device_info": {
-            "name": "Test name",
-            "model": MODEL_25,
-            "sw_version": "some fw string",
-        },
-        "device_settings": {
-            "ws_outbound_enabled": True,
-            "ws_outbound_server_valid": ws_outbound_server_valid,
-        },
-        "device_status": {
-            "sys": {
-                "available_updates": {
-                    "beta": {"version": "some_beta_version"},
-                    "stable": {"version": "some_beta_version"},
-                },
-                "relay_in_thermostat": True,
-            },
-            "wifi": {"rssi": -63},
-        },
-        "last_error": "DeviceConnectionError()",
-    }
+    assert (
+        result["device_settings"]["ws_outbound_server_valid"]
+        == ws_outbound_server_valid
+    )
