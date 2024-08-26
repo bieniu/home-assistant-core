@@ -151,7 +151,7 @@ async def test_rpc_config_entry_diagnostics(
             "model": MODEL_25,
             "sw_version": "some fw string",
         },
-        "device_settings": {},
+        "device_settings": {"ws_outbound_enabled": False},
         "device_status": {
             "sys": {
                 "available_updates": {
