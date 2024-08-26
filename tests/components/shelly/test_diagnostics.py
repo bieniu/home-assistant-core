@@ -184,17 +184,7 @@ async def test_rpc_config_entry_diagnostics_ws_outbound(
     config["ws"] = {"enable": True, "server": ws_outbound_server}
     monkeypatch.setattr(mock_rpc_device, "config", config)
 
-    await init_integration(hass, 2, sleep_period=60)
-
-    entry = hass.config_entries.async_entries(DOMAIN)[0]
-    entry_dict = entry.as_dict()
-    entry_dict["data"].update(
-        {key: REDACTED for key in TO_REDACT if key in entry_dict["data"]}
-    )
-
-    type(mock_rpc_device).last_error = PropertyMock(
-        return_value=DeviceConnectionError()
-    )
+    entry = await init_integration(hass, 2, sleep_period=60)
 
     result = await get_diagnostics_for_config_entry(hass, hass_client, entry)
 
