@@ -7,19 +7,24 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from aioshelly.block_device import Block
+from aioshelly.const import MODEL_NAMES
 from aioshelly.exceptions import DeviceConnectionError, InvalidAuthError, RpcCallError
 
 from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
+from homeassistant.helpers.device_registry import (
+    CONNECTION_BLUETOOTH,
+    CONNECTION_NETWORK_MAC,
+    DeviceInfo,
+)
 from homeassistant.helpers.entity import Entity, EntityDescription
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity_registry import RegistryEntry
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_SLEEP_PERIOD, LOGGER
+from .const import CONF_SLEEP_PERIOD, DOMAIN, LOGGER
 from .coordinator import ShellyBlockCoordinator, ShellyConfigEntry, ShellyRpcCoordinator
 from .utils import (
     async_remove_shelly_entity,
@@ -348,14 +353,34 @@ class ShellyBlockEntity(CoordinatorEntity[ShellyBlockCoordinator]):
 class ShellyRpcEntity(CoordinatorEntity[ShellyRpcCoordinator]):
     """Helper class to represent a rpc entity."""
 
-    def __init__(self, coordinator: ShellyRpcCoordinator, key: str) -> None:
+    def __init__(
+        self, coordinator: ShellyRpcCoordinator, key: str, bt_device: bool = False
+    ) -> None:
         """Initialize Shelly entity."""
         super().__init__(coordinator)
         self.key = key
-        self._attr_device_info = {
-            "connections": {(CONNECTION_NETWORK_MAC, coordinator.mac)}
-        }
-        self._attr_unique_id = f"{coordinator.mac}-{key}"
+        if bt_device:
+            device_id = coordinator.device.config[key]["addr"]
+            device_name = coordinator.device.config[key]["name"]
+            bthome_device_id = coordinator.device.config[key]["trv"]
+            model_id = coordinator.device.config[bthome_device_id]["meta"]["ui"].get(
+                "local_name"
+            )
+            self._attr_device_info = DeviceInfo(
+                connections={(CONNECTION_BLUETOOTH, device_id)},
+                identifiers={(DOMAIN, device_id)},
+                via_device=(DOMAIN, coordinator.mac),
+                manufacturer="Shelly",
+                model=MODEL_NAMES.get(model_id),
+                model_id=model_id,
+                name=device_name,
+            )
+            self._attr_unique_id = f"{coordinator.mac}-{device_id}-{key}"
+        else:
+            self._attr_device_info = DeviceInfo(
+                connections={(CONNECTION_NETWORK_MAC, coordinator.mac)},
+            )
+            self._attr_unique_id = f"{coordinator.mac}-{key}"
         self._attr_name = get_rpc_entity_name(coordinator.device, key)
 
     @property
