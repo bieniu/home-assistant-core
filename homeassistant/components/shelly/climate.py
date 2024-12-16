@@ -556,8 +556,10 @@ class RpcBluClimate(ShellyRpcEntity, ClimateEntity):
 
         if self._thermostat_type == "cooling":
             self._attr_hvac_modes = [HVACMode.OFF, HVACMode.COOL]
+            self._default_hvac_action = HVACAction.COOLING
         else:
             self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
+            self._default_hvac_action = HVACAction.HEATING
         self._humidity_key: str | None = None
         # Check if there is a corresponding humidity key for the thermostat ID
         if (humidity_key := f"humidity:{id_}") in self.coordinator.device.status:
@@ -591,6 +593,15 @@ class RpcBluClimate(ShellyRpcEntity, ClimateEntity):
     def hvac_mode(self) -> HVACMode:
         """HVAC current mode."""
         return HVACMode.COOL if self._thermostat_type == "cooling" else HVACMode.HEAT
+
+    @property
+    def hvac_action(self) -> HVACAction | None:
+        """Return the current running hvac operation if supported."""
+        return (
+            self._default_hvac_action
+            if self.status["position"] > 0
+            else HVACAction.IDLE
+        )
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
