@@ -36,6 +36,20 @@ async def test_show_form(hass: HomeAssistant) -> None:
     assert result["step_id"] == "user"
 
 
+async def test_form_with_api_error(hass: HomeAssistant) -> None:
+    """Test the form is aborted because of API error."""
+    with patch(
+        "homeassistant.components.gios.coordinator.Gios._get_stations",
+        side_effect=ApiError("error"),
+    ):
+        flow = config_flow.GiosFlowHandler()
+        flow.hass = hass
+
+        result = await flow.async_step_user()
+
+    assert result["type"] is FlowResultType.ABORT
+
+
 async def test_invalid_sensor_data(hass: HomeAssistant) -> None:
     """Test that errors are shown when sensor data is invalid."""
     with (
