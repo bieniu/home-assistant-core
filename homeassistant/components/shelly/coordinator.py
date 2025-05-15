@@ -533,6 +533,21 @@ class ShellyRpcCoordinator(ShellyCoordinatorBase[RpcDevice]):
         return format_mac(bluetooth_mac_from_primary_mac(self.mac)).upper()
 
     @property
+    def zigbee_ieee(self) -> str | None:
+        """Return the Zigbee IEEE for Gen4 device.
+
+        It has been confirmed with Shelly that Zigbee IEEE is created
+        by adding FF:FE in the middle of the MAC address.
+        """
+        if get_device_entry_gen(self.config_entry) != 4:
+            return None
+
+        bytes_list = [self.mac[i : i + 2] for i in range(0, 12, 2)]
+        ieee_bytes = bytes_list[:3] + ["FF", "FE"] + bytes_list[3:]
+
+        return ":".join(ieee_bytes)
+
+    @property
     def connections(self) -> set[tuple[str, str]]:
         """Connections of the device."""
         connections = super().connections
