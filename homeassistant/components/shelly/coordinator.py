@@ -36,6 +36,7 @@ from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.device_registry import (
     CONNECTION_BLUETOOTH,
     CONNECTION_NETWORK_MAC,
+    CONNECTION_ZIGBEE,
     format_mac,
 )
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -545,7 +546,7 @@ class ShellyRpcCoordinator(ShellyCoordinatorBase[RpcDevice]):
         bytes_list = [self.mac[i : i + 2] for i in range(0, 12, 2)]
         ieee_bytes = bytes_list[:3] + ["FF", "FE"] + bytes_list[3:]
 
-        return ":".join(ieee_bytes)
+        return ":".join(ieee_bytes).lower()
 
     @property
     def connections(self) -> set[tuple[str, str]]:
@@ -553,6 +554,8 @@ class ShellyRpcCoordinator(ShellyCoordinatorBase[RpcDevice]):
         connections = super().connections
         if not self.sleep_period:
             connections.add((CONNECTION_BLUETOOTH, self.bluetooth_source))
+        if self.zigbee_ieee:
+            connections.add((CONNECTION_ZIGBEE, self.zigbee_ieee))
         return connections
 
     async def async_device_online(self, source: str) -> None:
