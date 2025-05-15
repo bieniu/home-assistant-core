@@ -1096,3 +1096,21 @@ async def test_device_entry_bt_address(
     assert device
     assert len(device.connections) == 2
     assert (dr.CONNECTION_BLUETOOTH, "12:34:56:78:9A:BE") in device.connections
+
+
+async def test_device_entry_zigbee_ieee(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    mock_rpc_device: Mock,
+) -> None:
+    """Check if Zigbee IEEE is added to device entry connections."""
+    entry = await init_integration(hass, 4)
+
+    device = device_registry.async_get_device(
+        identifiers={(DOMAIN, entry.entry_id)},
+        connections={(dr.CONNECTION_NETWORK_MAC, dr.format_mac(entry.unique_id))},
+    )
+
+    assert device
+    assert len(device.connections) == 3
+    assert (dr.CONNECTION_ZIGBEE, "12:34:56:ff:fe:78:9a:bc") in device.connections
