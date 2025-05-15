@@ -10,7 +10,7 @@ from typing import Any, cast
 
 from aioshelly.ble import async_ensure_ble_enabled, async_stop_scanner
 from aioshelly.block_device import BlockDevice, BlockUpdateType
-from aioshelly.const import MODEL_VALVE
+from aioshelly.const import GEN4, MODEL_VALVE
 from aioshelly.exceptions import (
     DeviceConnectionError,
     InvalidAuthError,
@@ -540,7 +540,7 @@ class ShellyRpcCoordinator(ShellyCoordinatorBase[RpcDevice]):
         It has been confirmed with Shelly that Zigbee IEEE is created
         by adding FF:FE in the middle of the MAC address.
         """
-        if get_device_entry_gen(self.config_entry) != 4:
+        if get_device_entry_gen(self.config_entry) != GEN4:
             return None
 
         bytes_list = [self.mac[i : i + 2] for i in range(0, 12, 2)]
