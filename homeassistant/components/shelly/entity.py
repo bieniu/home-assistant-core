@@ -653,7 +653,6 @@ class ShellySleepingBlockAttributeEntity(ShellyBlockAttributeEntity):
             )
         elif entry is not None:
             self._attr_unique_id = entry.unique_id
-            self._attr_name = cast(str, entry.original_name)
 
     @callback
     def _update_callback(self) -> None:
@@ -723,8 +722,6 @@ class ShellySleepingRpcAttributeEntity(ShellyRpcAttributeEntity):
             self._attr_name = get_rpc_entity_name(
                 coordinator.device, key, description.name
             )
-        elif entry is not None:
-            self._attr_name = cast(str, entry.original_name)
 
     async def async_update(self) -> None:
         """Update the entity."""
