@@ -12,11 +12,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN, UPDATE_INTERVAL_DAILY_FORECAST, UPDATE_INTERVAL_OBSERVATION
+from .const import (
+    DOMAIN,
+    UPDATE_INTERVAL_DAILY_FORECAST,
+    UPDATE_INTERVAL_HOURLY_FORECAST,
+    UPDATE_INTERVAL_OBSERVATION,
+)
 from .coordinator import (
     AccuWeatherConfigEntry,
     AccuWeatherDailyForecastDataUpdateCoordinator,
     AccuWeatherData,
+    AccuWeatherHourlyForecastDataUpdateCoordinator,
     AccuWeatherObservationDataUpdateCoordinator,
 )
 
@@ -55,12 +61,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: AccuWeatherConfigEntry) 
         UPDATE_INTERVAL_DAILY_FORECAST,
     )
 
+    coordinator_hourly_forecast = AccuWeatherHourlyForecastDataUpdateCoordinator(
+        hass,
+        entry,
+        accuweather,
+        name,
+        "hourly forecast",
+        UPDATE_INTERVAL_HOURLY_FORECAST,
+    )
+
     await coordinator_observation.async_config_entry_first_refresh()
     await coordinator_daily_forecast.async_config_entry_first_refresh()
+    await coordinator_hourly_forecast.async_config_entry_first_refresh()
 
     entry.runtime_data = AccuWeatherData(
         coordinator_observation=coordinator_observation,
         coordinator_daily_forecast=coordinator_daily_forecast,
+        coordinator_hourly_forecast=coordinator_hourly_forecast,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

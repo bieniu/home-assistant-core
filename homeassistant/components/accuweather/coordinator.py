@@ -33,6 +33,7 @@ class AccuWeatherData:
 
     coordinator_observation: AccuWeatherObservationDataUpdateCoordinator
     coordinator_daily_forecast: AccuWeatherDailyForecastDataUpdateCoordinator
+    coordinator_hourly_forecast: AccuWeatherHourlyForecastDataUpdateCoordinator
 
 
 type AccuWeatherConfigEntry = ConfigEntry[AccuWeatherData]
@@ -122,6 +123,56 @@ class AccuWeatherDailyForecastDataUpdateCoordinator(
         try:
             async with timeout(10):
                 result = await self.accuweather.async_get_daily_forecast(
+                    language=self.hass.config.language
+                )
+        except EXCEPTIONS as error:
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="forecast_update_error",
+                translation_placeholders={"error": repr(error)},
+            ) from error
+
+        _LOGGER.debug("Requests remaining: %d", self.accuweather.requests_remaining)
+
+        return result
+
+
+class AccuWeatherHourlyForecastDataUpdateCoordinator(
+    TimestampDataUpdateCoordinator[list[dict[str, Any]]]
+):
+    """Class to manage fetching AccuWeather data API."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: AccuWeatherConfigEntry,
+        accuweather: AccuWeather,
+        name: str,
+        coordinator_type: str,
+        update_interval: timedelta,
+    ) -> None:
+        """Initialize."""
+        self.accuweather = accuweather
+        self.location_key = accuweather.location_key
+
+        if TYPE_CHECKING:
+            assert self.location_key is not None
+
+        self.device_info = _get_device_info(self.location_key, name)
+
+        super().__init__(
+            hass,
+            _LOGGER,
+            config_entry=config_entry,
+            name=f"{name} ({coordinator_type})",
+            update_interval=update_interval,
+        )
+
+    async def _async_update_data(self) -> list[dict[str, Any]]:
+        """Update data via library."""
+        try:
+            async with timeout(10):
+                result = await self.accuweather.async_get_hourly_forecast(
                     language=self.hass.config.language
                 )
         except EXCEPTIONS as error:
