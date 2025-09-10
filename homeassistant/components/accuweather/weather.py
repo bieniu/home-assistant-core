@@ -219,27 +219,26 @@ class AccuWeatherEntity(
         """Return the hourly forecast in native units."""
         return [
             {
-                ATTR_FORECAST_TIME: utc_from_timestamp(item["EpochDate"]).isoformat(),
-                ATTR_FORECAST_CLOUD_COVERAGE: item["CloudCoverDay"],
-                ATTR_FORECAST_HUMIDITY: item["RelativeHumidityDay"]["Average"],
-                ATTR_FORECAST_NATIVE_TEMP: item["TemperatureMax"][ATTR_VALUE],
-                ATTR_FORECAST_NATIVE_TEMP_LOW: item["TemperatureMin"][ATTR_VALUE],
-                ATTR_FORECAST_NATIVE_APPARENT_TEMP: item["RealFeelTemperatureMax"][
+                ATTR_FORECAST_TIME: utc_from_timestamp(
+                    item["EpochDateTime"]
+                ).isoformat(),
+                ATTR_FORECAST_CLOUD_COVERAGE: item["CloudCover"],
+                ATTR_FORECAST_HUMIDITY: item["RelativeHumidity"],
+                ATTR_FORECAST_NATIVE_TEMP: item["Temperature"][ATTR_VALUE],
+                ATTR_FORECAST_NATIVE_APPARENT_TEMP: item["RealFeelTemperature"][
                     ATTR_VALUE
                 ],
-                ATTR_FORECAST_NATIVE_PRECIPITATION: item["TotalLiquidDay"][ATTR_VALUE],
+                ATTR_FORECAST_NATIVE_PRECIPITATION: item["TotalLiquid"][ATTR_VALUE],
                 ATTR_FORECAST_PRECIPITATION_PROBABILITY: item[
-                    "PrecipitationProbabilityDay"
+                    "PrecipitationProbability"
                 ],
-                ATTR_FORECAST_NATIVE_WIND_SPEED: item["WindDay"][ATTR_SPEED][
+                ATTR_FORECAST_NATIVE_WIND_SPEED: item["Wind"][ATTR_SPEED][ATTR_VALUE],
+                ATTR_FORECAST_NATIVE_WIND_GUST_SPEED: item["WindGust"][ATTR_SPEED][
                     ATTR_VALUE
                 ],
-                ATTR_FORECAST_NATIVE_WIND_GUST_SPEED: item["WindGustDay"][ATTR_SPEED][
-                    ATTR_VALUE
-                ],
-                ATTR_FORECAST_UV_INDEX: item["UVIndex"][ATTR_VALUE],
-                ATTR_FORECAST_WIND_BEARING: item["WindDay"][ATTR_DIRECTION]["Degrees"],
-                ATTR_FORECAST_CONDITION: CONDITION_MAP.get(item["IconDay"]),
+                ATTR_FORECAST_UV_INDEX: item["UVIndex"],
+                ATTR_FORECAST_WIND_BEARING: item["Wind"][ATTR_DIRECTION]["Degrees"],
+                ATTR_FORECAST_CONDITION: CONDITION_MAP.get(item["WeatherIcon"]),
             }
             for item in self.hourly_coordinator.data
         ]
