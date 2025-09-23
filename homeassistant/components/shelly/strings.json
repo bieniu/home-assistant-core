@@ -118,6 +118,11 @@
     }
   },
   "entity": {
+    "button": {
+      "mute_alarm": {
+        "name": "Mute alarm"
+      }
+    },
     "event": {
       "input": {
         "state_attributes": {

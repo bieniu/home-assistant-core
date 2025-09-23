@@ -410,3 +410,141 @@ async def test_migrate_unique_id_blu_trv(
     assert entity_entry.unique_id == "F8447725F0DD-blutrv:200-calibrate"
 
     assert "Migrating unique_id for button.trv_name_calibrate" in caplog.text
+
+
+async def test_smoke_mute_button(
+    hass: HomeAssistant,
+    mock_rpc_device: Mock,
+    entity_registry: EntityRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+    snapshot: SnapshotAssertion,
+) -> None:
+    """Test Shelly Plus Smoke mute alarm button."""
+    from homeassistant.components.shelly.const import MODEL_PLUS_SMOKE
+    
+    # Set up the device as a Shelly Plus Smoke
+    monkeypatch.setattr(mock_rpc_device, "model", MODEL_PLUS_SMOKE)
+    
+    # Add smoke component status to device
+    status = deepcopy(mock_rpc_device.status)
+    status["smoke:0"] = {"id": 0, "alarm": False, "mute": False}
+    monkeypatch.setattr(mock_rpc_device, "status", status)
+    
+    # Add smoke component config to device
+    config = deepcopy(mock_rpc_device.config)
+    config["smoke:0"] = {"id": 0, "name": "Smoke detector"}
+    monkeypatch.setattr(mock_rpc_device, "config", config)
+    
+    await init_integration(hass, 2)
+
+    entity_id = "button.test_name_mute_alarm"
+
+    # mute alarm button
+    assert (state := hass.states.get(entity_id))
+    assert state == snapshot(name=f"{entity_id}-state")
+
+    assert (entry := entity_registry.async_get(entity_id))
+    assert entry == snapshot(name=f"{entity_id}-entry")
+
+    await hass.services.async_call(
+        BUTTON_DOMAIN,
+        SERVICE_PRESS,
+        {ATTR_ENTITY_ID: entity_id},
+        blocking=True,
+    )
+    mock_rpc_device.call_rpc.assert_called_once_with("Smoke.Mute", {"id": 0})
+
+
+@pytest.mark.parametrize(
+    ("exception", "error"),
+    [
+        (
+            DeviceConnectionError,
+            "Device communication error occurred while calling action for button.test_name_mute_alarm of Test name",
+        ),
+        (
+            RpcCallError(999),
+            "RPC call error occurred while calling action for button.test_name_mute_alarm of Test name",
+        ),
+    ],
+)
+async def test_smoke_mute_button_exc(
+    hass: HomeAssistant,
+    mock_rpc_device: Mock,
+    monkeypatch: pytest.MonkeyPatch,
+    exception: Exception,
+    error: str,
+) -> None:
+    """Test Shelly Plus Smoke mute alarm button with exception."""
+    from homeassistant.components.shelly.const import MODEL_PLUS_SMOKE
+    
+    # Set up the device as a Shelly Plus Smoke
+    monkeypatch.setattr(mock_rpc_device, "model", MODEL_PLUS_SMOKE)
+    
+    # Add smoke component status to device
+    status = deepcopy(mock_rpc_device.status)
+    status["smoke:0"] = {"id": 0, "alarm": False, "mute": False}
+    monkeypatch.setattr(mock_rpc_device, "status", status)
+    
+    # Add smoke component config to device
+    config = deepcopy(mock_rpc_device.config)
+    config["smoke:0"] = {"id": 0, "name": "Smoke detector"}
+    monkeypatch.setattr(mock_rpc_device, "config", config)
+
+    await init_integration(hass, 2)
+
+    mock_rpc_device.call_rpc.side_effect = exception
+
+    with pytest.raises(HomeAssistantError, match=error):
+        await hass.services.async_call(
+            BUTTON_DOMAIN,
+            SERVICE_PRESS,
+            {ATTR_ENTITY_ID: "button.test_name_mute_alarm"},
+            blocking=True,
+        )
+
+
+async def test_smoke_mute_button_auth_error(
+    hass: HomeAssistant,
+    mock_rpc_device: Mock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test Shelly Plus Smoke mute alarm button with authentication error."""
+    from homeassistant.components.shelly.const import MODEL_PLUS_SMOKE
+    
+    # Set up the device as a Shelly Plus Smoke
+    monkeypatch.setattr(mock_rpc_device, "model", MODEL_PLUS_SMOKE)
+    
+    # Add smoke component status to device
+    status = deepcopy(mock_rpc_device.status)
+    status["smoke:0"] = {"id": 0, "alarm": False, "mute": False}
+    monkeypatch.setattr(mock_rpc_device, "status", status)
+    
+    # Add smoke component config to device
+    config = deepcopy(mock_rpc_device.config)
+    config["smoke:0"] = {"id": 0, "name": "Smoke detector"}
+    monkeypatch.setattr(mock_rpc_device, "config", config)
+
+    entry = await init_integration(hass, 2)
+
+    mock_rpc_device.call_rpc.side_effect = InvalidAuthError
+
+    await hass.services.async_call(
+        BUTTON_DOMAIN,
+        SERVICE_PRESS,
+        {ATTR_ENTITY_ID: "button.test_name_mute_alarm"},
+        blocking=True,
+    )
+
+    assert entry.state is ConfigEntryState.LOADED
+
+    flows = hass.config_entries.flow.async_progress()
+    assert len(flows) == 1
+
+    flow = flows[0]
+    assert flow.get("step_id") == "reauth_confirm"
+    assert flow.get("handler") == DOMAIN
+
+    assert "context" in flow
+    assert flow["context"].get("source") == SOURCE_REAUTH
+    assert flow["context"].get("entry_id") == entry.entry_id

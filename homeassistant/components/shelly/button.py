@@ -24,9 +24,14 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, LOGGER, SHELLY_GAS_MODELS
+from .const import DOMAIN, LOGGER, SHELLY_GAS_MODELS, SHELLY_SMOKE_MODELS
 from .coordinator import ShellyBlockCoordinator, ShellyConfigEntry, ShellyRpcCoordinator
-from .entity import get_entity_block_device_info, get_entity_rpc_device_info
+from .entity import (
+    get_entity_block_device_info,
+    get_entity_rpc_device_info,
+    ShellySleepingRpcAttributeEntity,
+    RpcEntityDescription,
+)
 from .utils import (
     async_remove_orphaned_entities,
     format_ble_addr,
@@ -82,6 +87,18 @@ BUTTONS: Final[list[ShellyButtonDescription[Any]]] = [
         entity_category=EntityCategory.CONFIG,
         press_action="trigger_shelly_gas_unmute",
         supported=lambda coordinator: coordinator.model in SHELLY_GAS_MODELS,
+    ),
+]
+
+# Button descriptions for sleeping RPC devices (like Shelly Plus Smoke)
+SMOKE_BUTTONS: Final[list[ShellyButtonDescription]] = [
+    ShellyButtonDescription[ShellyRpcCoordinator](
+        key="mute_alarm",
+        name="Mute alarm",
+        translation_key="mute_alarm",
+        entity_category=EntityCategory.CONFIG,
+        press_action="mute",
+        supported=lambda coordinator: coordinator.model in SHELLY_SMOKE_MODELS,
     ),
 ]
 
@@ -172,13 +189,23 @@ async def async_setup_entry(
         hass, config_entry.entry_id, partial(async_migrate_unique_ids, coordinator)
     )
 
-    entities: list[ShellyButton | ShellyBluTrvButton | ShellyVirtualButton] = []
+    entities: list[
+        ShellyButton | ShellyBluTrvButton | ShellyVirtualButton | ShellySmokeMuteButton
+    ] = []
 
     entities.extend(
         ShellyButton(coordinator, button)
         for button in BUTTONS
         if button.supported(coordinator)
     )
+
+    # Add smoke buttons for supported models (sleeping RPC devices)
+    if isinstance(coordinator, ShellyRpcCoordinator) and coordinator.model in SHELLY_SMOKE_MODELS:
+        entities.extend(
+            ShellySmokeMuteButton(coordinator, button)
+            for button in SMOKE_BUTTONS
+            if button.supported(coordinator)
+        )
 
     if not isinstance(coordinator, ShellyRpcCoordinator):
         async_add_entities(entities)
@@ -359,3 +386,61 @@ class ShellyVirtualButton(ShellyBaseButton):
         await self.coordinator.device.button_trigger(
             self._id, self.entity_description.press_action
         )
+
+
+class ShellySmokeMuteButton(ShellySleepingRpcAttributeEntity, ButtonEntity):
+    """Defines a Shelly smoke mute button for sleeping devices."""
+
+    _attr_has_entity_name = True
+    entity_description: ShellyButtonDescription[ShellyRpcCoordinator]
+
+    def __init__(
+        self,
+        coordinator: ShellyRpcCoordinator,
+        description: ShellyButtonDescription[ShellyRpcCoordinator],
+        key: str = "smoke:0",
+    ) -> None:
+        """Initialize Shelly smoke mute button."""
+        # Create a dummy RpcEntityDescription for the parent class
+        rpc_description = RpcEntityDescription(
+            key=description.key,
+            name=description.name,
+            sub_key="alarm",
+        )
+        
+        super().__init__(coordinator, key, "alarm", rpc_description)
+        
+        self.entity_description = description
+        # Override unique_id to match button pattern
+        self._attr_unique_id = f"{coordinator.mac}-{key}-{description.key}"
+
+    async def async_press(self) -> None:
+        """Triggers the Shelly smoke mute button press service."""
+        try:
+            await self._press_method()
+        except DeviceConnectionError as err:
+            self.coordinator.last_update_success = False
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="device_communication_action_error",
+                translation_placeholders={
+                    "entity": self.entity_id,
+                    "device": self.coordinator.name,
+                },
+            ) from err
+        except RpcCallError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="rpc_call_action_error",
+                translation_placeholders={
+                    "entity": self.entity_id,
+                    "device": self.coordinator.name,
+                },
+            ) from err
+        except InvalidAuthError:
+            await self.coordinator.async_shutdown_device_and_start_reauth()
+
+    async def _press_method(self) -> None:
+        """Press method."""
+        # Call the Smoke.Mute API method
+        await self.coordinator.device.call_rpc("Smoke.Mute", {"id": 0})
