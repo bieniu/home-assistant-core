@@ -408,7 +408,7 @@ class ShellySmokeMuteButton(ShellySleepingRpcAttributeEntity, ButtonEntity):
             sub_key="alarm",
         )
         
-        super().__init__(coordinator, key, "alarm", rpc_description)
+        super().__init__(coordinator, key, "mute", rpc_description)
         
         self.entity_description = description
         # Override unique_id to match button pattern
