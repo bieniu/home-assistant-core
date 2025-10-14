@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from aioshelly.const import MODEL_OUT_PLUG_S_G3, MODEL_PLUG_S_G3, MODEL_WALL_DISPLAY
+from aioshelly.const import MODEL_OUT_PLUG_S_G3, MODEL_PLUG_S_G3
 from aioshelly.exceptions import DeviceConnectionError, RpcCallError
 from aioshelly.rpc_device import RpcDevice
 from awesomeversion import AwesomeVersion
@@ -20,9 +20,8 @@ from .const import (
     BLE_SCANNER_MIN_FIRMWARE,
     CONF_BLE_SCANNER_MODE,
     DOMAIN,
+    FIRMWARE_UNSUPPORTED_ISSUE_ID,
     OUTBOUND_WEBSOCKET_INCORRECTLY_ENABLED_ISSUE_ID,
-    WALL_DISPLAY_FIRMWARE_UNSUPPORTED_ISSUE_ID,
-    WALL_DISPLAY_MIN_FIRMWARE,
     BLEScannerMode,
 )
 from .coordinator import ShellyConfigEntry
@@ -70,21 +69,23 @@ def async_manage_ble_scanner_firmware_unsupported_issue(
 
 
 @callback
-def async_manage_wall_display_firmware_unsupported_issue(
+def async_manage_firmware_unsupported_issue(
     hass: HomeAssistant,
     entry: ShellyConfigEntry,
+    model: str,
+    min_firmware: str,
 ) -> None:
-    """Manage the Wall Display firmware unsupported issue."""
-    issue_id = WALL_DISPLAY_FIRMWARE_UNSUPPORTED_ISSUE_ID.format(unique=entry.unique_id)
+    """Manage the firmware unsupported issue."""
+    issue_id = FIRMWARE_UNSUPPORTED_ISSUE_ID.format(unique=entry.unique_id)
 
     if TYPE_CHECKING:
         assert entry.runtime_data.rpc is not None
 
     device = entry.runtime_data.rpc.device
 
-    if entry.data["model"] == MODEL_WALL_DISPLAY:
+    if entry.data["model"] == model:
         firmware = AwesomeVersion(device.shelly["ver"])
-        if firmware < WALL_DISPLAY_MIN_FIRMWARE:
+        if firmware < min_firmware:
             ir.async_create_issue(
                 hass,
                 DOMAIN,
@@ -92,7 +93,7 @@ def async_manage_wall_display_firmware_unsupported_issue(
                 is_fixable=True,
                 is_persistent=True,
                 severity=ir.IssueSeverity.WARNING,
-                translation_key="wall_display_firmware_unsupported",
+                translation_key="firmware_unsupported",
                 translation_placeholders={
                     "device_name": device.name,
                     "ip_address": device.ip_address,
