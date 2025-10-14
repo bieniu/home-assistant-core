@@ -242,7 +242,7 @@ async def async_create_fix_flow(
 
     if (
         "ble_scanner_firmware_unsupported" in issue_id
-        or "wall_display_firmware_unsupported" in issue_id
+        or "firmware_unsupported" in issue_id
     ):
         return FirmwareUpdateFlow(device)
 
