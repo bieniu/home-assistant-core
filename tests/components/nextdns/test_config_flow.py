@@ -228,7 +228,7 @@ async def test_reconfigure_flow(
         (ValueError, "unknown"),
     ],
 )
-async def test_reconfigure_errors(
+async def test_reconfiguration_errors(
     hass: HomeAssistant,
     exc: Exception,
     base_error: str,
