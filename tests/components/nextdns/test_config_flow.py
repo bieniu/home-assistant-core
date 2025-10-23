@@ -75,7 +75,7 @@ async def test_form_errors(
     assert result["errors"] == {}
 
     with patch(
-        "homeassistant.components.nextdns.NextDns.create",
+        "homeassistant.components.nextdns.config_flow.NextDns.create",
         side_effect=exc,
     ):
         result = await hass.config_entries.flow.async_configure(
@@ -202,7 +202,9 @@ async def test_reauth_errors(
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
 
-    with patch("homeassistant.components.nextdns.NextDns.create", side_effect=exc):
+    with patch(
+        "homeassistant.components.nextdns.config_flow.NextDns.create", side_effect=exc
+    ):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             user_input={CONF_API_KEY: "new_api_key"},
@@ -268,7 +270,9 @@ async def test_reconfiguration_errors(
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reconfigure"
 
-    with patch("homeassistant.components.nextdns.NextDns.create", side_effect=exc):
+    with patch(
+        "homeassistant.components.nextdns.config_flow.NextDns.create", side_effect=exc
+    ):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             user_input={CONF_API_KEY: "new_api_key"},
