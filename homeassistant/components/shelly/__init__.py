@@ -26,8 +26,13 @@ from homeassistant.const import (
     CONF_USERNAME,
     Platform,
 )
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryNotReady,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 from homeassistant.helpers import (
     config_validation as cv,
     device_registry as dr,
@@ -42,6 +47,7 @@ from .const import (
     BLOCK_EXPECTED_SLEEP_PERIOD,
     BLOCK_WRONG_SLEEP_PERIOD,
     CONF_COAP_PORT,
+    CONF_KEY,
     CONF_SLEEP_PERIOD,
     DOMAIN,
     FIRMWARE_UNSUPPORTED_ISSUE_ID,
@@ -110,11 +116,97 @@ COAP_SCHEMA: Final = vol.Schema(
 )
 CONFIG_SCHEMA: Final = vol.Schema({DOMAIN: COAP_SCHEMA}, extra=vol.ALLOW_EXTRA)
 
+SERVICE_GET_KVS: Final = "get_kvs"
+SERVICE_GET_KVS_SCHEMA: Final = cv.make_device_service_schema(
+    {vol.Required(CONF_KEY): cv.string}
+)
+
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Shelly component."""
     if (conf := config.get(DOMAIN)) is not None:
         hass.data[DOMAIN] = {CONF_COAP_PORT: conf[CONF_COAP_PORT]}
+
+    async def async_handle_get_kvs(call: ServiceCall) -> ServiceResponse:
+        """Handle the get_kvs service call."""
+        key = call.data[CONF_KEY]
+        
+        # Get device registry
+        device_registry = dr.async_get(hass)
+        
+        # Get all devices from the service call
+        device_ids = call.data.get("device_id", [])
+        if isinstance(device_ids, str):
+            device_ids = [device_ids]
+        
+        if not device_ids:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_device_selected",
+            )
+        
+        # Process only the first device (service should target one device)
+        device_id = device_ids[0]
+        device = device_registry.async_get(device_id)
+        
+        if device is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="device_not_found",
+            )
+        
+        # Find the config entry for this device
+        config_entry: ShellyConfigEntry | None = None
+        for entry_id in device.config_entries:
+            entry = hass.config_entries.async_get_entry(entry_id)
+            if entry and entry.domain == DOMAIN:
+                config_entry = entry  # type: ignore[assignment]
+                break
+        
+        if config_entry is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="config_entry_not_found",
+            )
+        
+        # Check if device is RPC (Gen2+) device
+        if get_device_entry_gen(config_entry) not in RPC_GENERATIONS:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="not_rpc_device",
+            )
+        
+        runtime_data = config_entry.runtime_data
+        
+        if not runtime_data.rpc:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="device_not_ready",
+            )
+        
+        # Call the RPC method to get KVS value
+        try:
+            result = await runtime_data.rpc.device.call_rpc("KVS.Get", {"key": key})
+            return {"value": result.get("value")}
+        except RpcCallError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="rpc_call_error",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        except DeviceConnectionError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="device_connection_error",
+            ) from err
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_KVS,
+        async_handle_get_kvs,
+        schema=SERVICE_GET_KVS_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
 
     return True
 

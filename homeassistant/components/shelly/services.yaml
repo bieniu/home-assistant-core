@@ -1,0 +1,14 @@
+get_kvs:
+  name: Get KVS value
+  description: Get a value from the device's Key-Value Storage
+  target:
+    device:
+      integration: shelly
+  fields:
+    key:
+      name: Key
+      description: The name of the key from which the KVS value will be retrieved
+      required: true
+      example: "my_key"
+      selector:
+        text:

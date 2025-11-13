@@ -485,6 +485,27 @@
     },
     "update_error_sleeping_device": {
       "message": "Sleeping device did not update within {period} seconds interval"
+    },
+    "no_device_selected": {
+      "message": "No device selected for the service call"
+    },
+    "device_not_found": {
+      "message": "Device not found"
+    },
+    "config_entry_not_found": {
+      "message": "Config entry not found for the device"
+    },
+    "not_rpc_device": {
+      "message": "The selected device is not an RPC (Gen2+) device. KVS is only supported on RPC devices"
+    },
+    "device_not_ready": {
+      "message": "Device is not ready or not initialized"
+    },
+    "rpc_call_error": {
+      "message": "RPC call error: {error}"
+    },
+    "device_connection_error": {
+      "message": "Device connection error"
     }
   },
   "issues": {

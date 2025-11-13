@@ -41,6 +41,7 @@ PROVISIONING_TIMEOUT: Final = 35  # 35 seconds to wait for device to connect to 
 CONF_SSID: Final = "ssid"
 
 CONF_COAP_PORT: Final = "coap_port"
+CONF_KEY: Final = "key"
 FIRMWARE_PATTERN: Final = re.compile(r"^(\d{8})")
 
 # max BLOCK light transition time in milliseconds (min=0)
