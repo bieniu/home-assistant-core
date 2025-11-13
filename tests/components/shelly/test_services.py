@@ -44,50 +44,6 @@ async def test_service_get_kvs(
     mock_rpc_device.call_rpc.assert_called_once_with("KVS.Get", {"key": "my_key"})
 
 
-async def test_service_get_kvs_multiple_devices(
-    hass: HomeAssistant, mock_rpc_device: Mock, device_registry: dr.DeviceRegistry
-) -> None:
-    """Test get_kvs service with multiple device IDs (should use first)."""
-    await init_integration(hass, 2)
-    
-    # Get the device
-    device = device_registry.async_get_device(
-        connections={(dr.CONNECTION_NETWORK_MAC, "123456789ABC")}
-    )
-    assert device
-    
-    # Mock the RPC call
-    mock_rpc_device.call_rpc = AsyncMock(return_value={"value": "test_value"})
-    
-    # Call the service with multiple device IDs (pass as list)
-    response = await hass.services.async_call(
-        DOMAIN,
-        "get_kvs",
-        {"device_id": [device.id, "fake_device_id"], "key": "my_key"},
-        blocking=True,
-        return_response=True,
-    )
-    
-    # Verify the response uses first device
-    assert response == {"value": "test_value"}
-    mock_rpc_device.call_rpc.assert_called_once_with("KVS.Get", {"key": "my_key"})
-
-
-async def test_service_get_kvs_no_device(hass: HomeAssistant) -> None:
-    """Test get_kvs service with no device selected."""
-    await init_integration(hass, 2)
-    
-    # Call the service without device_id
-    with pytest.raises(ServiceValidationError, match="No device selected"):
-        await hass.services.async_call(
-            DOMAIN,
-            "get_kvs",
-            {"key": "my_key"},
-            blocking=True,
-            return_response=True,
-        )
-
-
 async def test_service_get_kvs_invalid_device(hass: HomeAssistant) -> None:
     """Test get_kvs service with invalid device ID."""
     await init_integration(hass, 2)

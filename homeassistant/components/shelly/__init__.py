@@ -117,8 +117,11 @@ COAP_SCHEMA: Final = vol.Schema(
 CONFIG_SCHEMA: Final = vol.Schema({DOMAIN: COAP_SCHEMA}, extra=vol.ALLOW_EXTRA)
 
 SERVICE_GET_KVS: Final = "get_kvs"
-SERVICE_GET_KVS_SCHEMA: Final = cv.make_device_service_schema(
-    {vol.Required(CONF_KEY): cv.string}
+SERVICE_GET_KVS_SCHEMA: Final = vol.Schema(
+    {
+        vol.Required("device_id"): cv.string,
+        vol.Required(CONF_KEY): cv.string,
+    }
 )
 
 
@@ -130,23 +133,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def async_handle_get_kvs(call: ServiceCall) -> ServiceResponse:
         """Handle the get_kvs service call."""
         key = call.data[CONF_KEY]
+        device_id = call.data["device_id"]
         
         # Get device registry
         device_registry = dr.async_get(hass)
-        
-        # Get all devices from the service call
-        device_ids = call.data.get("device_id", [])
-        if isinstance(device_ids, str):
-            device_ids = [device_ids]
-        
-        if not device_ids:
-            raise ServiceValidationError(
-                translation_domain=DOMAIN,
-                translation_key="no_device_selected",
-            )
-        
-        # Process only the first device (service should target one device)
-        device_id = device_ids[0]
         device = device_registry.async_get(device_id)
         
         if device is None:
