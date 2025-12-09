@@ -2179,3 +2179,25 @@ async def test_rpc_rgbcct_sensors(
     assert entry.unique_id == "123456789ABC-rgbcct:0-energy_rgbcct"
     assert entry.name is None
     assert entry.translation_key is None  # entity with device class and no channel name
+
+
+async def test_rpc_voltmeter_value_sensor_with_channel_name(
+    hass: HomeAssistant,
+    mock_rpc_device: Mock,
+    entity_registry: EntityRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test RPC voltmeter value sensor with the channel name."""
+    entity_id = f"{SENSOR_DOMAIN}.test_name_channel_voltmeter_value"
+    monkeypatch.setitem(mock_rpc_device.config["voltmeter:100"], "name", "Channel")
+    await init_integration(hass, 2)
+
+    assert (state := hass.states.get(entity_id))
+    assert (
+        state.attributes.get(ATTR_FRIENDLY_NAME) == "Test name Channel voltmeter value"
+    )
+
+    assert (entry := entity_registry.async_get(entity_id))
+    assert entry.unique_id == "123456789ABC-voltmeter:100-voltmeter_value"
+    assert entry.name is None
+    assert entry.translation_key == "voltmeter_value_with_channel_name"
