@@ -5006,6 +5006,12 @@
       "config_flow": true,
       "iot_class": "cloud_polling"
     },
+    "perplexity": {
+      "name": "Perplexity",
+      "integration_type": "service",
+      "config_flow": true,
+      "iot_class": "cloud_polling"
+    },
     "pge": {
       "name": "Pacific Gas & Electric (PG&E)",
       "integration_type": "virtual",

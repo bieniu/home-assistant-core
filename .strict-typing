@@ -402,6 +402,7 @@ homeassistant.components.paperless_ngx.*
 homeassistant.components.peblar.*
 homeassistant.components.peco.*
 homeassistant.components.pegel_online.*
+homeassistant.components.perplexity.*
 homeassistant.components.persistent_notification.*
 homeassistant.components.person.*
 homeassistant.components.pi_hole.*

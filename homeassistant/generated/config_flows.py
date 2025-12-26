@@ -509,6 +509,7 @@ FLOWS = {
         "peco",
         "pegel_online",
         "permobil",
+        "perplexity",
         "pglab",
         "philips_js",
         "pi_hole",
