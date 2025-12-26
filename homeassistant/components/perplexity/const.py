@@ -19,7 +19,7 @@ RECOMMENDED_CONVERSATION_OPTIONS = {
     CONF_PROMPT: llm.DEFAULT_INSTRUCTIONS_PROMPT,
 }
 
-PERPLEXITY_MODELS = [
-    "sonar-pro",
-    "sonar-reasoning-pro",
-]
+PERPLEXITY_MODELS = {
+    "Sonar Pro": "sonar-pro",
+    "Sonar Reasoning Pro": "sonar-reasoning-pro",
+}

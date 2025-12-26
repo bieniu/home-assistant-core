@@ -102,9 +102,9 @@ class PerplexityConversationFlowHandler(ConfigSubentryFlow):
         if user_input is not None:
             if not user_input.get(CONF_LLM_HASS_API):
                 user_input.pop(CONF_LLM_HASS_API, None)
-            return self.async_create_entry(
-                title=user_input[CONF_MODEL], data=user_input
-            )
+            title = user_input[CONF_MODEL]
+            user_input[CONF_MODEL] = PERPLEXITY_MODELS[user_input[CONF_MODEL]]
+            return self.async_create_entry(title=title, data=user_input)
 
         options = [
             SelectOptionDict(value=model, label=model) for model in PERPLEXITY_MODELS
