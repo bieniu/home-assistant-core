@@ -1481,6 +1481,9 @@ peblar==0.4.0
 # homeassistant.components.peco
 peco==0.1.2
 
+# homeassistant.components.perplexity
+perplexityai==0.22.0
+
 # homeassistant.components.escea
 pescea==1.0.12
 

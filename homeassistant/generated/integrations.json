@@ -5000,6 +5000,12 @@
       "integration_type": "virtual",
       "supported_by": "opower"
     },
+    "perplexity": {
+      "name": "Perplexity",
+      "integration_type": "service",
+      "config_flow": true,
+      "iot_class": "cloud_polling"
+    },
     "permobil": {
       "name": "MyPermobil",
       "integration_type": "hub",
