@@ -20,8 +20,6 @@ RECOMMENDED_CONVERSATION_OPTIONS = {
 }
 
 PERPLEXITY_MODELS = [
-    "sonar",
     "sonar-pro",
-    "sonar-reasoning",
     "sonar-reasoning-pro",
 ]
