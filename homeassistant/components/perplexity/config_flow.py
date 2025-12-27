@@ -15,9 +15,8 @@ from homeassistant.config_entries import (
     ConfigSubentryFlow,
     SubentryFlowResult,
 )
-from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API, CONF_MODEL
+from homeassistant.const import CONF_API_KEY, CONF_MODEL
 from homeassistant.core import callback
-from homeassistant.helpers import llm
 from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.selector import (
     SelectOptionDict,
@@ -100,8 +99,6 @@ class ConversationFlowHandler(ConfigSubentryFlow):
     ) -> SubentryFlowResult:
         """User flow to create a conversation subentry."""
         if user_input is not None:
-            if not user_input.get(CONF_LLM_HASS_API):
-                user_input.pop(CONF_LLM_HASS_API, None)
             return self.async_create_entry(
                 title=user_input[CONF_MODEL], data=user_input
             )
@@ -110,13 +107,6 @@ class ConversationFlowHandler(ConfigSubentryFlow):
             SelectOptionDict(value=model, label=model) for model in PERPLEXITY_MODELS
         ]
 
-        hass_apis: list[SelectOptionDict] = [
-            SelectOptionDict(
-                label=api.name,
-                value=api.id,
-            )
-            for api in llm.async_get_apis(self.hass)
-        ]
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
@@ -137,12 +127,6 @@ class ConversationFlowHandler(ConfigSubentryFlow):
                             ]
                         },
                     ): TemplateSelector(),
-                    vol.Optional(
-                        CONF_LLM_HASS_API,
-                        default=RECOMMENDED_CONVERSATION_OPTIONS[CONF_LLM_HASS_API],
-                    ): SelectSelector(
-                        SelectSelectorConfig(options=hass_apis, multiple=True)
-                    ),
                 }
             ),
         )

@@ -3,8 +3,7 @@
 from typing import Literal
 
 from homeassistant.components import conversation
-from homeassistant.config_entries import ConfigSubentry
-from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
+from homeassistant.const import MATCH_ALL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -33,14 +32,6 @@ class PerplexityConversationEntity(PerplexityEntity, conversation.ConversationEn
 
     _attr_name = None
 
-    def __init__(self, entry: PerplexityConfigEntry, subentry: ConfigSubentry) -> None:
-        """Initialize the agent."""
-        super().__init__(entry, subentry)
-        if self.subentry.data.get(CONF_LLM_HASS_API):
-            self._attr_supported_features = (
-                conversation.ConversationEntityFeature.CONTROL
-            )
-
     @property
     def supported_languages(self) -> list[str] | Literal["*"]:
         """Return a list of supported languages."""
@@ -57,7 +48,7 @@ class PerplexityConversationEntity(PerplexityEntity, conversation.ConversationEn
         try:
             await chat_log.async_provide_llm_data(
                 user_input.as_llm_context(DOMAIN),
-                options.get(CONF_LLM_HASS_API),
+                None,
                 options.get(CONF_PROMPT),
                 user_input.extra_system_prompt,
             )

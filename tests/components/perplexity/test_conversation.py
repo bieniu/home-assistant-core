@@ -24,7 +24,6 @@ def freeze_the_time():
         yield
 
 
-@pytest.mark.parametrize("enable_assist", [True, False], ids=["assist", "no_assist"])
 async def test_all_entities(
     hass: HomeAssistant,
     snapshot: SnapshotAssertion,
@@ -63,73 +62,3 @@ async def test_default_prompt(
     assert mock_chat_log.content[1:] == snapshot
     call = mock_perplexity_client.chat.completions.create.call_args_list[0][1]
     assert call["model"] == "sonar"
-
-
-@pytest.mark.parametrize("enable_assist", [True])
-async def test_function_call(
-    hass: HomeAssistant,
-    mock_chat_log: MockChatLog,  # noqa: F811
-    mock_config_entry: MockConfigEntry,
-    snapshot: SnapshotAssertion,
-    mock_perplexity_client: AsyncMock,
-) -> None:
-    """Test function call from the assistant."""
-    await setup_integration(hass, mock_config_entry)
-
-    mock_chat_log.mock_tool_results(
-        {
-            "call_call_1": "value1",
-            "call_call_2": "value2",
-        }
-    )
-
-    async def completion_result(*args, messages, **kwargs):
-        for message in messages:
-            role = message["role"] if isinstance(message, dict) else message.role
-            if role == "tool":
-                mock_response = AsyncMock()
-                mock_response.choices = [
-                    AsyncMock(
-                        message=AsyncMock(
-                            content="I have successfully called the function",
-                            role="assistant",
-                            tool_calls=None,
-                        )
-                    )
-                ]
-                return mock_response
-
-        mock_response = AsyncMock()
-        mock_response.choices = [
-            AsyncMock(
-                message=AsyncMock(
-                    content=None,
-                    role="assistant",
-                    tool_calls=[
-                        AsyncMock(
-                            id="call_call_1",
-                            type="function",
-                            function=AsyncMock(
-                                name="test_tool",
-                                arguments='{"param1":"call1"}',
-                            ),
-                        )
-                    ],
-                )
-            )
-        ]
-        return mock_response
-
-    mock_perplexity_client.chat.completions.create = completion_result
-
-    result = await conversation.async_converse(
-        hass,
-        "Please call the test function",
-        mock_chat_log.conversation_id,
-        Context(),
-        agent_id="conversation.sonar",
-    )
-
-    assert result.response.response_type == intent.IntentResponseType.ACTION_DONE
-    # Don't test the prompt, as it's not deterministic
-    assert mock_chat_log.content[1:] == snapshot

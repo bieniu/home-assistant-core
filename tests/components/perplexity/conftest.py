@@ -8,9 +8,8 @@ import pytest
 
 from homeassistant.components.perplexity.const import CONF_PROMPT, DOMAIN
 from homeassistant.config_entries import ConfigSubentryData
-from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API, CONF_MODEL
+from homeassistant.const import CONF_API_KEY, CONF_MODEL
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import llm
 from homeassistant.setup import async_setup_component
 
 from tests.common import MockConfigEntry
@@ -27,21 +26,12 @@ def mock_setup_entry() -> Generator[AsyncMock]:
 
 
 @pytest.fixture
-def enable_assist() -> bool:
+def conversation_subentry_data() -> dict[str, Any]:
     """Mock conversation subentry data."""
-    return False
-
-
-@pytest.fixture
-def conversation_subentry_data(enable_assist: bool) -> dict[str, Any]:
-    """Mock conversation subentry data."""
-    res: dict[str, Any] = {
+    return {
         CONF_MODEL: "sonar",
         CONF_PROMPT: "You are a helpful assistant.",
     }
-    if enable_assist:
-        res[CONF_LLM_HASS_API] = [llm.LLM_API_ASSIST]
-    return res
 
 
 @pytest.fixture
@@ -81,7 +71,6 @@ async def mock_perplexity_client() -> AsyncGenerator[AsyncMock]:
                 message=AsyncMock(
                     content="Hello, how can I help you?",
                     role="assistant",
-                    tool_calls=None,
                 )
             )
         ]
@@ -102,7 +91,6 @@ async def mock_perplexity_client_config_flow() -> AsyncGenerator[AsyncMock]:
                 message=AsyncMock(
                     content="pong",
                     role="assistant",
-                    tool_calls=None,
                 )
             )
         ]

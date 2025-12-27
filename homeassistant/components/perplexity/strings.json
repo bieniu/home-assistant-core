@@ -28,7 +28,6 @@
       "step": {
         "user": {
           "data": {
-            "llm_hass_api": "[%key:common::config_flow::data::llm_hass_api%]",
             "model": "Model",
             "prompt": "[%key:common::config_flow::data::prompt%]"
           },
