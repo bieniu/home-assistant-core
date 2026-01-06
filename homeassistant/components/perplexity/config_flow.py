@@ -92,13 +92,10 @@ class PerplexityAITaskFlowHandler(ConfigSubentryFlow):
     ) -> SubentryFlowResult:
         """User flow to create an AI task subentry."""
         if user_input is not None:
-            title = user_input[CONF_MODEL]
-            user_input[CONF_MODEL] = PERPLEXITY_MODELS[title]
-            return self.async_create_entry(title=title, data=user_input)
-
-        options = [
-            SelectOptionDict(value=model, label=model) for model in PERPLEXITY_MODELS
-        ]
+            model_id = user_input[CONF_MODEL]
+            return self.async_create_entry(
+                title=PERPLEXITY_MODELS[model_id], data=user_input
+            )
 
         return self.async_show_form(
             step_id="user",
@@ -107,7 +104,10 @@ class PerplexityAITaskFlowHandler(ConfigSubentryFlow):
                     vol.Required(CONF_MODEL, default=RECOMMENDED_CHAT_MODEL): (
                         SelectSelector(
                             SelectSelectorConfig(
-                                options=options,
+                                options=[
+                                    SelectOptionDict(value=model_id, label=name)
+                                    for model_id, name in PERPLEXITY_MODELS.items()
+                                ],
                                 mode=SelectSelectorMode.DROPDOWN,
                             ),
                         )
