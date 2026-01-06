@@ -12,7 +12,7 @@ from homeassistant.helpers.httpx_client import get_async_client
 
 from .const import LOGGER
 
-PLATFORMS = [Platform.AI_TASK, Platform.CONVERSATION]
+PLATFORMS = [Platform.AI_TASK]
 
 type PerplexityConfigEntry = ConfigEntry[AsyncPerplexity]
 
