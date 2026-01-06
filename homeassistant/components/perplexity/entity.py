@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import AsyncGenerator
 import json
+from mimetypes import guess_file_type
+from pathlib import Path
 from typing import Any
 
 from perplexity import AsyncPerplexity, PerplexityError
@@ -14,6 +17,7 @@ from voluptuous_openapi import convert
 from homeassistant.components import conversation
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.const import CONF_MODEL
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, llm
 from homeassistant.helpers.entity import Entity
@@ -118,6 +122,43 @@ async def _transform_response(
     yield data
 
 
+async def _async_prepare_files_for_prompt(
+    hass: HomeAssistant, files: list[tuple[Path, str | None]]
+) -> list[dict[str, Any]]:
+    """Prepare files for the prompt.
+
+    Caller needs to ensure that the files are allowed.
+    """
+
+    def prepare_files() -> list[dict[str, Any]]:
+        content: list[dict[str, Any]] = []
+
+        for file_path, mime_type in files:
+            if not file_path.exists():
+                raise HomeAssistantError(f"`{file_path}` does not exist")
+
+            if mime_type is None:
+                mime_type = guess_file_type(file_path)[0]
+
+            if not mime_type or not mime_type.startswith("image/"):
+                raise HomeAssistantError(
+                    "Only images are supported by the Perplexity API, "
+                    f"`{file_path}` is not an image file"
+                )
+
+            base64_file = base64.b64encode(file_path.read_bytes()).decode("utf-8")
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime_type};base64,{base64_file}"},
+                }
+            )
+
+        return content
+
+    return await hass.async_add_executor_job(prepare_files)
+
+
 class PerplexityEntity(Entity):
     """Base entity for Perplexity."""
 
@@ -159,6 +200,24 @@ class PerplexityEntity(Entity):
             for content in chat_log.content
             if (m := _convert_content_to_chat_message(content))
         ]
+
+        last_content = chat_log.content[-1]
+
+        # Handle attachments by adding them to the last user message
+        if last_content.role == "user" and last_content.attachments:
+            last_message = model_args["messages"][-1]
+            assert last_message["role"] == "user" and isinstance(
+                last_message["content"], str
+            )
+            # Encode files with base64 and append them to the text prompt
+            files = await _async_prepare_files_for_prompt(
+                self.hass,
+                [(a.path, a.mime_type) for a in last_content.attachments],
+            )
+            last_message["content"] = [
+                {"type": "text", "text": last_message["content"]},
+                *files,
+            ]
 
         client: AsyncPerplexity = self.entry.runtime_data
 
