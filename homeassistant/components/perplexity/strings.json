@@ -20,6 +20,23 @@
     }
   },
   "config_subentries": {
+    "ai_task_data": {
+      "entry_type": "AI task",
+      "initiate_flow": {
+        "user": "Add AI task"
+      },
+      "step": {
+        "user": {
+          "data": {
+            "model": "[%key:component::perplexity::config_subentries::conversation::step::user::data::model%]"
+          },
+          "data_description": {
+            "model": "[%key:component::perplexity::config_subentries::conversation::step::user::data_description::model%]"
+          },
+          "description": "Configure the new AI task"
+        }
+      }
+    },
     "conversation": {
       "entry_type": "Conversation agent",
       "initiate_flow": {

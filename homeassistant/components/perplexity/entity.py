@@ -105,7 +105,7 @@ async def _transform_response(
         data["tool_calls"] = [
             llm.ToolInput(
                 id=tool_call.id or "",
-                tool_name=tool_call.function.name if tool_call.function else "",
+                tool_name=tool_call.function.name or "" if tool_call.function else "",
                 tool_args=(
                     _decode_tool_arguments(tool_call.function.arguments)
                     if tool_call.function and tool_call.function.arguments

@@ -51,6 +51,7 @@ class PerplexityConfigFlow(ConfigFlow, domain=DOMAIN):
         """Return subentries supported by this handler."""
         return {
             "conversation": PerplexityConversationFlowHandler,
+            "ai_task_data": PerplexityAITaskFlowHandler,
         }
 
     async def async_step_user(
@@ -142,6 +143,39 @@ class PerplexityConversationFlowHandler(ConfigSubentryFlow):
                         default=RECOMMENDED_CONVERSATION_OPTIONS[CONF_LLM_HASS_API],
                     ): SelectSelector(
                         SelectSelectorConfig(options=hass_apis, multiple=True)
+                    ),
+                }
+            ),
+        )
+
+
+class PerplexityAITaskFlowHandler(ConfigSubentryFlow):
+    """Handle subentry flow for Perplexity AI task."""
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """User flow to create an AI task subentry."""
+        if user_input is not None:
+            title = user_input[CONF_MODEL]
+            user_input[CONF_MODEL] = PERPLEXITY_MODELS[user_input[CONF_MODEL]]
+            return self.async_create_entry(title=title, data=user_input)
+
+        options = [
+            SelectOptionDict(value=model, label=model) for model in PERPLEXITY_MODELS
+        ]
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_MODEL, default=RECOMMENDED_CHAT_MODEL): (
+                        SelectSelector(
+                            SelectSelectorConfig(
+                                options=options,
+                                mode=SelectSelectorMode.DROPDOWN,
+                            ),
+                        )
                     ),
                 }
             ),
