@@ -12,6 +12,7 @@ from typing import Any
 from perplexity import AsyncPerplexity, PerplexityError
 from perplexity.types import StreamChunk
 from perplexity.types.chat.completion_create_params import Tool, ToolFunction
+import voluptuous as vol
 from voluptuous_openapi import convert
 
 from homeassistant.components import conversation
@@ -27,6 +28,53 @@ from .const import DOMAIN, LOGGER
 
 # Max number of back and forth with the LLM to generate a response
 MAX_TOOL_ITERATIONS = 10
+
+
+def _adjust_schema(schema: dict[str, Any]) -> None:
+    """Adjust the schema to be compatible with Perplexity API."""
+    if schema["type"] == "object":
+        if "properties" not in schema:
+            return
+
+        if "required" not in schema:
+            schema["required"] = []
+
+        # Ensure all properties are required
+        for prop, prop_info in schema["properties"].items():
+            _adjust_schema(prop_info)
+            if prop not in schema["required"]:
+                prop_info["type"] = [prop_info["type"], "null"]
+                schema["required"].append(prop)
+
+    elif schema["type"] == "array":
+        if "items" not in schema:
+            return
+
+        _adjust_schema(schema["items"])
+
+
+def _format_structured_output(
+    name: str, schema: vol.Schema, llm_api: llm.APIInstance | None
+) -> dict[str, Any]:
+    """Format the schema to be compatible with Perplexity API."""
+    result: dict[str, Any] = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": name,
+            "strict": True,
+        },
+    }
+    result_schema = convert(
+        schema,
+        custom_serializer=(
+            llm_api.custom_serializer if llm_api else llm.selector_serializer
+        ),
+    )
+
+    _adjust_schema(result_schema)
+
+    result["json_schema"]["schema"] = result_schema
+    return result
 
 
 def _format_tool(
@@ -179,6 +227,8 @@ class PerplexityEntity(Entity):
     async def _async_handle_chat_log(
         self,
         chat_log: conversation.ChatLog,
+        structure_name: str | None = None,
+        structure: vol.Schema | None = None,
     ) -> None:
         """Generate an answer for the chat log."""
         model_args: dict[str, Any] = {
@@ -218,6 +268,11 @@ class PerplexityEntity(Entity):
                 {"type": "text", "text": last_message["content"]},
                 *files,
             ]
+
+        if structure:
+            model_args["response_format"] = _format_structured_output(
+                structure_name or "response", structure, chat_log.llm_api
+            )
 
         client: AsyncPerplexity = self.entry.runtime_data
 

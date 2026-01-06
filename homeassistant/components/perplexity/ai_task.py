@@ -48,7 +48,7 @@ class PerplexityAITaskEntity(
         chat_log: conversation.ChatLog,
     ) -> ai_task.GenDataTaskResult:
         """Handle a generate data task."""
-        await self._async_handle_chat_log(chat_log)
+        await self._async_handle_chat_log(chat_log, task.name, task.structure)
 
         if not isinstance(chat_log.content[-1], conversation.AssistantContent):
             raise HomeAssistantError(
