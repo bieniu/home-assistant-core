@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from json import JSONDecodeError
-import logging
 
 from homeassistant.components import ai_task, conversation
 from homeassistant.core import HomeAssistant
@@ -13,8 +12,6 @@ from homeassistant.util.json import json_loads
 
 from . import PerplexityConfigEntry
 from .entity import PerplexityEntity
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
