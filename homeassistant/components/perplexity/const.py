@@ -11,7 +11,7 @@ LOGGER = logging.getLogger(__package__)
 CONF_PROMPT = "prompt"
 CONF_RECOMMENDED = "recommended"
 
-RECOMMENDED_CHAT_MODEL = "sonar"
+RECOMMENDED_CHAT_MODEL = "Sonar"
 
 RECOMMENDED_CONVERSATION_OPTIONS = {
     CONF_RECOMMENDED: True,
@@ -20,6 +20,8 @@ RECOMMENDED_CONVERSATION_OPTIONS = {
 }
 
 PERPLEXITY_MODELS = {
+    "Sonar": "sonar",
     "Sonar Pro": "sonar-pro",
+    "Sonar Reasoning": "sonar-reasoning",
     "Sonar Reasoning Pro": "sonar-reasoning-pro",
 }
