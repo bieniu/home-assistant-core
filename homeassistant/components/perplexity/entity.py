@@ -9,7 +9,7 @@ from mimetypes import guess_file_type
 from pathlib import Path
 from typing import Any
 
-from perplexity import AsyncPerplexity, PerplexityError
+from perplexity import AsyncPerplexity, AuthenticationError, PerplexityError
 from perplexity.types import StreamChunk
 from perplexity.types.chat.completion_create_params import Tool, ToolFunction
 import voluptuous as vol
@@ -19,7 +19,7 @@ from homeassistant.components import conversation
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.const import CONF_MODEL
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers import device_registry as dr, llm
 from homeassistant.helpers.entity import Entity
 
@@ -279,6 +279,8 @@ class PerplexityEntity(Entity):
         for _iteration in range(MAX_TOOL_ITERATIONS):
             try:
                 result = await client.chat.completions.create(**model_args)
+            except AuthenticationError as err:
+                raise ConfigEntryAuthFailed("Invalid API key") from err
             except PerplexityError as err:
                 LOGGER.error("Error talking to Perplexity API: %s", err)
                 raise HomeAssistantError("Error talking to Perplexity API") from err
