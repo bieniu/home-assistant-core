@@ -1215,6 +1215,7 @@ build.json @home-assistant/supervisor
 /homeassistant/components/permobil/ @IsakNyberg
 /tests/components/permobil/ @IsakNyberg
 /homeassistant/components/perplexity/ @bieniu
+/tests/components/perplexity/ @bieniu
 /homeassistant/components/persistent_notification/ @home-assistant/core
 /tests/components/persistent_notification/ @home-assistant/core
 /homeassistant/components/pglab/ @pglab-electronics
