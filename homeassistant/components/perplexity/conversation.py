@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.json import json_dumps
 from homeassistant.helpers.llm import _get_exposed_entities
 
 from . import PerplexityConfigEntry
@@ -118,7 +119,7 @@ class ParsedAction:
 
     def __str__(self) -> str:
         """Return string representation."""
-        data_str = json.dumps(self.data) if self.data else "{}"
+        data_str = json_dumps(self.data) if self.data else "{}"
         return f"{self.domain}.{self.service} -> {self.target} ({data_str})"
 
 
