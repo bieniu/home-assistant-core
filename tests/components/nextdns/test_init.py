@@ -6,9 +6,14 @@ from nextdns import ApiError, InvalidApiKeyError
 import pytest
 from tenacity import RetryError
 
-from homeassistant.components.nextdns.const import DOMAIN
+from homeassistant.components.nextdns.const import (
+    CONF_PROFILE_ID,
+    CONF_PROFILE_NAME,
+    DOMAIN,
+    SUBENTRY_TYPE_PROFILE,
+)
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.const import CONF_API_KEY, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 
 from . import init_integration
@@ -63,7 +68,6 @@ async def test_unload_entry(
     await hass.async_block_till_done()
 
     assert mock_config_entry.state is ConfigEntryState.NOT_LOADED
-    assert not hass.data.get(DOMAIN)
 
 
 async def test_config_auth_failed(
@@ -88,3 +92,31 @@ async def test_config_auth_failed(
     assert "context" in flow
     assert flow["context"].get("source") == SOURCE_REAUTH
     assert flow["context"].get("entry_id") == mock_config_entry.entry_id
+
+
+async def test_migrate_entry_v1_to_v2(
+    hass: HomeAssistant,
+    mock_config_entry_v1: MockConfigEntry,
+    mock_nextdns_client: AsyncMock,
+) -> None:
+    """Test migration from version 1 to version 2."""
+    await init_integration(hass, mock_config_entry_v1)
+
+    # Verify migration was successful
+    assert mock_config_entry_v1.version == 2
+    assert mock_config_entry_v1.minor_version == 1
+    assert mock_config_entry_v1.title == "NextDNS"
+    assert mock_config_entry_v1.state is ConfigEntryState.LOADED
+
+    # Verify data was migrated correctly
+    assert CONF_PROFILE_ID not in mock_config_entry_v1.data
+    assert mock_config_entry_v1.data[CONF_API_KEY] == "fake_api_key"
+
+    # Verify subentry was created
+    assert len(mock_config_entry_v1.subentries) == 1
+    subentry = list(mock_config_entry_v1.subentries.values())[0]
+    assert subentry.subentry_type == SUBENTRY_TYPE_PROFILE
+    assert subentry.title == "Fake Profile"
+    assert subentry.data[CONF_PROFILE_ID] == "xyz12"
+    assert subentry.data[CONF_PROFILE_NAME] == "Fake Profile"
+    assert subentry.unique_id == "xyz12"
