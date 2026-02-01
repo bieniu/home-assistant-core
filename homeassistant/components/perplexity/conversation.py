@@ -1,9 +1,4 @@
-"""Conversation support for Perplexity with custom action parsing.
-
-Since the Perplexity API does not support native function calling / tool use,
-this implementation uses a structured JSON response format to parse actions
-from the LLM response and execute them.
-"""
+"""Conversation platform for Perplexity integration."""
 
 from __future__ import annotations
 
@@ -19,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.llm import _get_exposed_entities
 
 from . import PerplexityConfigEntry
 from .const import CONF_PROMPT, DOMAIN, LOGGER
@@ -135,15 +131,7 @@ class ParsedResponse:
 
 
 def _parse_json_response(response_text: str) -> ParsedResponse:
-    """Parse the JSON response from the LLM.
-
-    Args:
-        response_text: The raw response text from the LLM.
-
-    Returns:
-        ParsedResponse with content and optional actions.
-
-    """
+    """Parse the JSON response from the LLM."""
     try:
         data = json.loads(response_text)
     except json.JSONDecodeError:
@@ -232,12 +220,10 @@ class PerplexityConversationEntity(PerplexityEntity, conversation.ConversationEn
         llm_api_ids = options.get(CONF_LLM_HASS_API)
 
         if llm_api_ids:
-            # Use custom action parsing approach
             return await self._async_handle_with_actions(
                 user_input, chat_log, user_prompt, llm_api_ids
             )
 
-        # Standard conversation without action support
         try:
             await chat_log.async_provide_llm_data(
                 user_input.as_llm_context(DOMAIN),
@@ -259,11 +245,7 @@ class PerplexityConversationEntity(PerplexityEntity, conversation.ConversationEn
         user_prompt: str | None,
         llm_api_ids: list[str],
     ) -> conversation.ConversationResult:
-        """Handle conversation with custom action parsing.
-
-        Since Perplexity doesn't support native tool/function calling,
-        we use structured JSON output to parse actions from the response.
-        """
+        """Handle conversation with custom action parsing."""
         # Build system prompt with action instructions and entity context
         system_prompt_parts: list[str] = []
 
@@ -323,10 +305,6 @@ class PerplexityConversationEntity(PerplexityEntity, conversation.ConversationEn
     async def _async_generate_entity_context(self, llm_api_ids: list[str]) -> str:
         """Generate entity context for the system prompt."""
         try:
-            # Get exposed entities using the llm helper
-            # Import the internal function to get exposed entities
-            from homeassistant.helpers.llm import _get_exposed_entities  # noqa: PLC0415
-
             exposed_entities_data = _get_exposed_entities(
                 self.hass, conversation.DOMAIN, include_state=True
             )
