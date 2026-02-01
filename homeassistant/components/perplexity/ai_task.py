@@ -1,7 +1,5 @@
 """AI Task integration for Perplexity."""
 
-from custom_components.perplexity.const import DOMAIN
-
 from homeassistant.components import ai_task, conversation
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -9,6 +7,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util.json import JSON_DECODE_EXCEPTIONS, json_loads
 
 from . import PerplexityConfigEntry
+from .const import DOMAIN
 from .entity import PerplexityEntity
 
 
