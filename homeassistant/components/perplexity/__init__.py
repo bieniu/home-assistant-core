@@ -10,7 +10,7 @@ from homeassistant.helpers.httpx_client import get_async_client
 
 from .const import DOMAIN
 
-PLATFORMS = [Platform.AI_TASK]
+PLATFORMS = [Platform.AI_TASK, Platform.CONVERSATION]
 
 type PerplexityConfigEntry = ConfigEntry[AsyncPerplexity]
 

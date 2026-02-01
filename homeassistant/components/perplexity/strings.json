@@ -68,6 +68,30 @@
           "description": "Configure the new AI task"
         }
       }
+    },
+    "conversation": {
+      "abort": {
+        "entry_not_loaded": "The Perplexity integration is not loaded. Please ensure it is set up correctly before adding a conversation agent."
+      },
+      "entry_type": "Conversation agent",
+      "initiate_flow": {
+        "user": "Add conversation agent"
+      },
+      "step": {
+        "init": {
+          "data": {
+            "llm_hass_api": "[%key:common::config_flow::data::llm_hass_api%]",
+            "model": "[%key:component::perplexity::config_subentries::ai_task_data::step::user::data::model%]",
+            "prompt": "[%key:common::config_flow::data::prompt%]"
+          },
+          "data_description": {
+            "llm_hass_api": "The LLM APIs that the conversation agent should have access to control Home Assistant",
+            "model": "The model to use for the conversation agent",
+            "prompt": "Instruct how the LLM should respond. This can be a template."
+          },
+          "description": "Configure the conversation agent"
+        }
+      }
     }
   },
   "exceptions": {
