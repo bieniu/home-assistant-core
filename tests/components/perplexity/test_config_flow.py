@@ -6,14 +6,16 @@ from perplexity import AuthenticationError, PerplexityError
 
 from homeassistant.components.perplexity.config_flow import PerplexityConfigFlow
 from homeassistant.components.perplexity.const import (
+    CONF_PROMPT,
     CONF_REASONING_EFFORT,
     CONF_WEB_SEARCH,
     DOMAIN,
 )
 from homeassistant.config_entries import SOURCE_USER
-from homeassistant.const import CONF_API_KEY, CONF_MODEL
+from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API, CONF_MODEL
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import llm
 
 from tests.common import MockConfigEntry
 
@@ -457,3 +459,156 @@ async def test_ai_task_subentry_options_flow_non_reasoning_model(
     # Verify the option was saved
     subentry = entry.subentries[subentry_id]
     assert subentry.data[CONF_WEB_SEARCH] is True
+
+
+async def test_get_supported_subentry_types_includes_conversation(
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test async_get_supported_subentry_types returns conversation."""
+    subentry_types = PerplexityConfigFlow.async_get_supported_subentry_types(
+        mock_config_entry
+    )
+    assert "conversation" in subentry_types
+
+
+async def test_conversation_subentry_flow(
+    hass: HomeAssistant,
+    mock_setup_entry: MockConfigEntry,
+) -> None:
+    """Test conversation subentry flow."""
+    result = await hass.config_entries.subentries.async_init(
+        (mock_setup_entry.entry_id, "conversation"),
+        context={"source": SOURCE_USER},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_MODEL: "sonar-pro",
+            CONF_LLM_HASS_API: [llm.LLM_API_ASSIST],
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Sonar Pro"
+    assert result["data"][CONF_MODEL] == "sonar-pro"
+    assert result["data"][CONF_LLM_HASS_API] == [llm.LLM_API_ASSIST]
+
+
+async def test_conversation_subentry_flow_without_assist(
+    hass: HomeAssistant,
+    mock_setup_entry: MockConfigEntry,
+) -> None:
+    """Test conversation subentry flow without LLM assist."""
+    result = await hass.config_entries.subentries.async_init(
+        (mock_setup_entry.entry_id, "conversation"),
+        context={"source": SOURCE_USER},
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_MODEL: "sonar",
+            CONF_LLM_HASS_API: [],  # Explicitly deselect LLM assist
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Sonar"
+    assert result["data"][CONF_MODEL] == "sonar"
+    assert CONF_LLM_HASS_API not in result["data"]
+
+
+async def test_conversation_subentry_flow_with_prompt(
+    hass: HomeAssistant,
+    mock_setup_entry: MockConfigEntry,
+) -> None:
+    """Test conversation subentry flow with custom prompt."""
+    result = await hass.config_entries.subentries.async_init(
+        (mock_setup_entry.entry_id, "conversation"),
+        context={"source": SOURCE_USER},
+    )
+
+    custom_prompt = "You are a helpful assistant for my smart home."
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_MODEL: "sonar",
+            CONF_PROMPT: custom_prompt,
+            CONF_LLM_HASS_API: [llm.LLM_API_ASSIST],
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_PROMPT] == custom_prompt
+
+
+async def test_conversation_subentry_reconfigure_flow(
+    hass: HomeAssistant,
+    mock_setup_entry: MockConfigEntry,
+) -> None:
+    """Test conversation subentry reconfigure flow."""
+    # First create a conversation subentry
+    result = await hass.config_entries.subentries.async_init(
+        (mock_setup_entry.entry_id, "conversation"),
+        context={"source": SOURCE_USER},
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_MODEL: "sonar",
+            CONF_LLM_HASS_API: [llm.LLM_API_ASSIST],
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    # Find the conversation subentry
+    conversation_subentry_id = None
+    for subentry_id, subentry in mock_setup_entry.subentries.items():
+        if subentry.subentry_type == "conversation":
+            conversation_subentry_id = subentry_id
+            break
+
+    assert conversation_subentry_id is not None
+
+    # Reconfigure
+    result = await mock_setup_entry.start_subentry_reconfigure_flow(
+        hass, conversation_subentry_id
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+
+    # Update with new model
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_MODEL: "sonar-pro",
+            CONF_LLM_HASS_API: [],
+        },
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+
+    # Verify the update
+    subentry = mock_setup_entry.subentries[conversation_subentry_id]
+    assert subentry.data[CONF_MODEL] == "sonar-pro"
+
+
+async def test_conversation_subentry_flow_entry_not_loaded(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test conversation subentry flow when entry is not loaded."""
+    # Don't set up the entry (leave it not loaded)
+    result = await hass.config_entries.subentries.async_init(
+        (mock_config_entry.entry_id, "conversation"),
+        context={"source": SOURCE_USER},
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "entry_not_loaded"

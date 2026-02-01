@@ -1,14 +1,17 @@
 """Tests helpers for the Perplexity integration."""
 
 from collections.abc import AsyncGenerator, Callable, Generator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from homeassistant.components.conversation.const import DOMAIN as CONVERSATION_DOMAIN
 from homeassistant.components.perplexity.const import DOMAIN
-from homeassistant.const import CONF_API_KEY, CONF_MODEL
+from homeassistant.config_entries import ConfigSubentryData
+from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API, CONF_MODEL
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import llm
 from homeassistant.setup import async_setup_component
 
 from tests.common import MockConfigEntry
@@ -22,7 +25,27 @@ async def setup_ha(hass: HomeAssistant) -> None:
 
 
 @pytest.fixture
-def mock_config_entry(hass: HomeAssistant) -> MockConfigEntry:
+def enable_assist() -> bool:
+    """Control whether to enable LLM assist API."""
+    return False
+
+
+@pytest.fixture
+def conversation_subentry_data(enable_assist: bool) -> dict[str, Any]:
+    """Mock conversation subentry data."""
+    res: dict[str, Any] = {
+        CONF_MODEL: "sonar",
+    }
+    if enable_assist:
+        res[CONF_LLM_HASS_API] = [llm.LLM_API_ASSIST]
+    return res
+
+
+@pytest.fixture
+def mock_config_entry(
+    hass: HomeAssistant,
+    conversation_subentry_data: dict[str, Any],
+) -> MockConfigEntry:
     """Mock a config entry."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -31,17 +54,45 @@ def mock_config_entry(hass: HomeAssistant) -> MockConfigEntry:
             CONF_API_KEY: "test_api_key",
         },
         subentries_data=[
-            {
-                "data": {CONF_MODEL: "sonar"},
-                "subentry_type": "ai_task_data",
-                "title": "Sonar",
-                "subentry_id": "ulid-ai-task",
-                "unique_id": None,
-            },
+            ConfigSubentryData(
+                data={CONF_MODEL: "sonar"},
+                subentry_type="ai_task_data",
+                title="Sonar",
+                subentry_id="ulid-ai-task",
+                unique_id=None,
+            ),
+            ConfigSubentryData(
+                data=conversation_subentry_data,
+                subentry_type="conversation",
+                title="Sonar Conversation",
+                subentry_id="ulid-conversation",
+                unique_id=None,
+            ),
         ],
     )
     entry.add_to_hass(hass)
     return entry
+
+
+@pytest.fixture
+def mock_config_entry_no_conversation() -> MockConfigEntry:
+    """Mock a config entry without conversation subentry."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Perplexity",
+        data={
+            CONF_API_KEY: "test_api_key",
+        },
+        subentries_data=[
+            ConfigSubentryData(
+                data={CONF_MODEL: "sonar"},
+                subentry_type="ai_task_data",
+                title="Sonar",
+                subentry_id="ulid-ai-task",
+                unique_id=None,
+            ),
+        ],
+    )
 
 
 @pytest.fixture
@@ -65,6 +116,7 @@ async def mock_setup_entry(
     mock_perplexity_client: MagicMock,
 ) -> MockConfigEntry:
     """Set up the Perplexity integration for testing."""
+    mock_config_entry.add_to_hass(hass)
     with patch(
         "homeassistant.components.perplexity.AsyncPerplexity",
         return_value=mock_perplexity_client,

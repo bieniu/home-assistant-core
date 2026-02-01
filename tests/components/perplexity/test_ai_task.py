@@ -30,9 +30,11 @@ async def test_ai_task_entity(
         entity_registry, mock_setup_entry.entry_id
     )
 
-    assert len(entity_entries) == 1
+    # Filter to only ai_task entities
+    ai_task_entries = [e for e in entity_entries if e.domain == "ai_task"]
+    assert len(ai_task_entries) == 1
 
-    for entity_entry in entity_entries:
+    for entity_entry in ai_task_entries:
         entity_entry_dict = entity_entry.as_partial_dict
         for item in (
             "area_id",

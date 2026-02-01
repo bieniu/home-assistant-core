@@ -14,6 +14,15 @@
         'title': 'Sonar',
         'unique_id': None,
       }),
+      'ulid-conversation': dict({
+        'data': dict({
+          'model': 'sonar',
+        }),
+        'subentry_id': 'ulid-conversation',
+        'subentry_type': 'conversation',
+        'title': 'Sonar Conversation',
+        'unique_id': None,
+      }),
     }),
     'title': 'Perplexity',
   })
