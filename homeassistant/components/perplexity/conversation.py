@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import json
 import re
 from typing import Any, Literal
 
@@ -16,6 +15,7 @@ from homeassistant.helpers import llm
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.json import json_dumps
 from homeassistant.helpers.llm import _get_exposed_entities
+from homeassistant.util.json import JSON_DECODE_EXCEPTIONS, json_loads_object
 
 from . import PerplexityConfigEntry
 from .const import CONF_PROMPT, DOMAIN, LOGGER
@@ -134,42 +134,50 @@ class ParsedResponse:
 def _parse_json_response(response_text: str) -> ParsedResponse:
     """Parse the JSON response from the LLM."""
     try:
-        data = json.loads(response_text)
-    except json.JSONDecodeError:
+        data = json_loads_object(response_text)
+    except JSON_DECODE_EXCEPTIONS:
         # If JSON parsing fails, try to extract JSON from markdown code blocks
         json_match = re.search(
             r"```(?:json)?\s*(\{.*?\})\s*```", response_text, re.DOTALL
         )
         if json_match:
             try:
-                data = json.loads(json_match.group(1))
-            except json.JSONDecodeError:
+                data = json_loads_object(json_match.group(1))
+            except JSON_DECODE_EXCEPTIONS:
                 return ParsedResponse(content=response_text)
         else:
             return ParsedResponse(content=response_text)
 
     # Extract response text
-    content = data.get("response", "")
-    if not content and isinstance(data.get("content"), str):
-        content = data["content"]
+    content_value = data.get("response")
+    if isinstance(content_value, str):
+        content = content_value
+    else:
+        content_value = data.get("content")
+        content = content_value if isinstance(content_value, str) else ""
 
     # Extract actions
     actions: list[ParsedAction] = []
-    raw_actions = data.get("actions", [])
-    if raw_actions:
+    raw_actions = data.get("actions")
+    if isinstance(raw_actions, list):
         for action_data in raw_actions:
             if not isinstance(action_data, dict):
                 continue
-            domain = action_data.get("domain", "")
-            service = action_data.get("service", "")
-            target = action_data.get("target", "")
-            if domain and service and target:
+            domain = action_data.get("domain")
+            service = action_data.get("service")
+            target = action_data.get("target")
+            raw_data = action_data.get("data")
+            if (
+                isinstance(domain, str)
+                and isinstance(service, str)
+                and isinstance(target, str)
+            ):
                 actions.append(
                     ParsedAction(
                         domain=domain,
                         service=service,
                         target=target,
-                        data=action_data.get("data") or {},
+                        data=raw_data if isinstance(raw_data, dict) else {},
                     )
                 )
 
