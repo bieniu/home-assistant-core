@@ -11,6 +11,9 @@ ATTR_SETTINGS = "settings"
 ATTR_STATUS = "status"
 
 CONF_PROFILE_ID = "profile_id"
+CONF_PROFILE_NAME = "profile_name"
+
+SUBENTRY_TYPE_PROFILE = "profile"
 
 UPDATE_INTERVAL_CONNECTION = timedelta(minutes=5)
 UPDATE_INTERVAL_ANALYTICS = timedelta(minutes=10)

@@ -9,13 +9,20 @@ from nextdns import ApiError, InvalidApiKeyError, NextDns
 from tenacity import RetryError
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_API_KEY, CONF_PROFILE_NAME
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigEntryState,
+    ConfigFlow,
+    ConfigFlowResult,
+    ConfigSubentryFlow,
+    SubentryFlowResult,
+)
+from homeassistant.const import CONF_API_KEY
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_PROFILE_ID, DOMAIN
+from .const import CONF_PROFILE_ID, CONF_PROFILE_NAME, DOMAIN, SUBENTRY_TYPE_PROFILE
 
 AUTH_SCHEMA = vol.Schema({vol.Required(CONF_API_KEY): str})
 
@@ -58,10 +65,23 @@ async def async_validate_new_api_key(
     return errors
 
 
+def _is_profile_already_configured(hass: HomeAssistant, profile_id: str) -> bool:
+    """Check if the profile is already configured."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for subentry in entry.subentries.values():
+            if (
+                subentry.subentry_type == SUBENTRY_TYPE_PROFILE
+                and subentry.data.get(CONF_PROFILE_ID) == profile_id
+            ):
+                return True
+    return False
+
+
 class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
     """Config flow for NextDNS."""
 
-    VERSION = 1
+    VERSION = 2
+    MINOR_VERSION = 1
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -76,6 +96,11 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self.api_key = user_input[CONF_API_KEY]
+
+            # Abort if a config entry with this API key already exists
+            # Additional profiles should be added via the subentry flow
+            self._async_abort_entries_match({CONF_API_KEY: self.api_key})
+
             try:
                 self.nextdns = await async_init_nextdns(self.hass, self.api_key)
             except InvalidApiKeyError:
@@ -104,22 +129,28 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
             profile_name = user_input[CONF_PROFILE_NAME]
             profile_id = self.nextdns.get_profile_id(profile_name)
 
-            await self.async_set_unique_id(profile_id)
-            self._abort_if_unique_id_configured()
-
             return self.async_create_entry(
-                title=profile_name,
-                data={CONF_PROFILE_ID: profile_id, CONF_API_KEY: self.api_key},
+                title="NextDNS",
+                data={CONF_API_KEY: self.api_key},
+                subentries=[
+                    {
+                        "subentry_type": SUBENTRY_TYPE_PROFILE,
+                        "data": {
+                            CONF_PROFILE_ID: profile_id,
+                            CONF_PROFILE_NAME: profile_name,
+                        },
+                        "title": profile_name,
+                        "unique_id": profile_id,
+                    },
+                ],
             )
+
+        available_profiles = [profile.name for profile in self.nextdns.profiles]
 
         return self.async_show_form(
             step_id="profiles",
             data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_PROFILE_NAME): vol.In(
-                        [profile.name for profile in self.nextdns.profiles]
-                    )
-                }
+                {vol.Required(CONF_PROFILE_NAME): vol.In(available_profiles)}
             ),
             errors=errors,
         )
@@ -138,11 +169,20 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
         entry = self._get_reauth_entry()
 
         if user_input is not None:
-            errors = await async_validate_new_api_key(
-                self.hass, user_input, entry.data[CONF_PROFILE_ID]
-            )
-            if errors.get("base") == "profile_not_available":
-                return self.async_abort(reason="profile_not_available")
+            # Get the first profile_id from subentries to validate
+            profile_ids = [
+                subentry.data[CONF_PROFILE_ID]
+                for subentry in entry.subentries.values()
+                if subentry.subentry_type == SUBENTRY_TYPE_PROFILE
+            ]
+            profile_id = profile_ids[0] if profile_ids else None
+
+            if profile_id:
+                errors = await async_validate_new_api_key(
+                    self.hass, user_input, profile_id
+                )
+                if errors.get("base") == "profile_not_available":
+                    return self.async_abort(reason="profile_not_available")
 
             if not errors:
                 return self.async_update_reload_and_abort(
@@ -164,11 +204,20 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
 
         if user_input is not None:
-            errors = await async_validate_new_api_key(
-                self.hass, user_input, entry.data[CONF_PROFILE_ID]
-            )
-            if errors.get("base") == "profile_not_available":
-                return self.async_abort(reason="profile_not_available")
+            # Get the first profile_id from subentries to validate
+            profile_ids = [
+                subentry.data[CONF_PROFILE_ID]
+                for subentry in entry.subentries.values()
+                if subentry.subentry_type == SUBENTRY_TYPE_PROFILE
+            ]
+            profile_id = profile_ids[0] if profile_ids else None
+
+            if profile_id:
+                errors = await async_validate_new_api_key(
+                    self.hass, user_input, profile_id
+                )
+                if errors.get("base") == "profile_not_available":
+                    return self.async_abort(reason="profile_not_available")
 
             if not errors:
                 return self.async_update_reload_and_abort(
@@ -179,6 +228,70 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=AUTH_SCHEMA,
+            errors=errors,
+        )
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Return subentries supported by this integration."""
+        return {SUBENTRY_TYPE_PROFILE: ProfileSubentryFlowHandler}
+
+
+class ProfileSubentryFlowHandler(ConfigSubentryFlow):
+    """Handle a subentry flow for profile."""
+
+    def __init__(self) -> None:
+        """Initialize the subentry flow."""
+        self.nextdns: NextDns
+
+    async def async_step_user(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> SubentryFlowResult:
+        """Handle the profile step."""
+        entry = self._get_entry()
+        if entry.state != ConfigEntryState.LOADED:
+            return self.async_abort(reason="entry_not_loaded")
+
+        errors: dict[str, str] = {}
+
+        # Initialize the NextDNS client
+        self.nextdns = entry.runtime_data.client
+
+        if user_input is not None:
+            profile_name = user_input[CONF_PROFILE_NAME]
+            profile_id = self.nextdns.get_profile_id(profile_name)
+
+            if _is_profile_already_configured(self.hass, profile_id):
+                errors["base"] = "already_configured"
+            else:
+                return self.async_create_entry(
+                    title=profile_name,
+                    data={
+                        CONF_PROFILE_ID: profile_id,
+                        CONF_PROFILE_NAME: profile_name,
+                    },
+                    unique_id=profile_id,
+                )
+
+        # Filter out already configured profiles
+        available_profiles = [
+            profile.name
+            for profile in self.nextdns.profiles
+            if not _is_profile_already_configured(self.hass, profile.id)
+        ]
+
+        if not available_profiles:
+            return self.async_abort(reason="all_profiles_configured")
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_PROFILE_NAME): vol.In(available_profiles)}
+            ),
             errors=errors,
         )
 

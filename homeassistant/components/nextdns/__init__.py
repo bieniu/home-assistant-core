@@ -2,6 +2,8 @@
 
 import asyncio
 from dataclasses import dataclass
+import logging
+from types import MappingProxyType
 
 from aiohttp.client_exceptions import ClientConnectorError
 from nextdns import (
@@ -18,7 +20,7 @@ from nextdns import (
 )
 from tenacity import RetryError
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import CONF_API_KEY, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
@@ -33,7 +35,9 @@ from .const import (
     ATTR_SETTINGS,
     ATTR_STATUS,
     CONF_PROFILE_ID,
+    CONF_PROFILE_NAME,
     DOMAIN,
+    SUBENTRY_TYPE_PROFILE,
 )
 from .coordinator import (
     NextDnsConnectionUpdateCoordinator,
@@ -46,12 +50,14 @@ from .coordinator import (
     NextDnsUpdateCoordinator,
 )
 
-type NextDnsConfigEntry = ConfigEntry[NextDnsData]
+_LOGGER = logging.getLogger(__name__)
+
+type NextDnsConfigEntry = ConfigEntry[NextDnsRuntimeData]
 
 
 @dataclass
 class NextDnsData:
-    """Data for the NextDNS integration."""
+    """Data for a NextDNS profile."""
 
     connection: NextDnsUpdateCoordinator[ConnectionStatus]
     dnssec: NextDnsUpdateCoordinator[AnalyticsDnssec]
@@ -60,6 +66,14 @@ class NextDnsData:
     protocols: NextDnsUpdateCoordinator[AnalyticsProtocols]
     settings: NextDnsUpdateCoordinator[Settings]
     status: NextDnsUpdateCoordinator[AnalyticsStatus]
+
+
+@dataclass
+class NextDnsRuntimeData:
+    """Runtime data for the NextDNS integration."""
+
+    client: NextDns
+    profiles: dict[str, NextDnsData]
 
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.SENSOR, Platform.SWITCH]
@@ -77,7 +91,6 @@ COORDINATORS: list[tuple[str, type[NextDnsUpdateCoordinator]]] = [
 async def async_setup_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> bool:
     """Set up NextDNS as config entry."""
     api_key = entry.data[CONF_API_KEY]
-    profile_id = entry.data[CONF_PROFILE_ID]
 
     websession = async_get_clientsession(hass)
     try:
@@ -98,19 +111,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> b
             translation_placeholders={"entry": entry.title},
         ) from err
 
-    tasks = []
-    coordinators = {}
+    profiles: dict[str, NextDnsData] = {}
 
-    # Independent DataUpdateCoordinator is used for each API endpoint to avoid
-    # unnecessary requests when entities using this endpoint are disabled.
-    for coordinator_name, coordinator_class in COORDINATORS:
-        coordinator = coordinator_class(hass, entry, nextdns, profile_id)
-        tasks.append(coordinator.async_config_entry_first_refresh())
-        coordinators[coordinator_name] = coordinator
+    for subentry_id, subentry in entry.subentries.items():
+        if subentry.subentry_type != SUBENTRY_TYPE_PROFILE:
+            continue
 
-    await asyncio.gather(*tasks)
+        profile_id = subentry.data[CONF_PROFILE_ID]
+        tasks = []
+        coordinators = {}
 
-    entry.runtime_data = NextDnsData(**coordinators)
+        # Independent DataUpdateCoordinator is used for each API endpoint to avoid
+        # unnecessary requests when entities using this endpoint are disabled.
+        for coordinator_name, coordinator_class in COORDINATORS:
+            coordinator = coordinator_class(
+                hass, entry, nextdns, profile_id, subentry_id
+            )
+            tasks.append(coordinator.async_config_entry_first_refresh())
+            coordinators[coordinator_name] = coordinator
+
+        await asyncio.gather(*tasks)
+
+        profiles[subentry_id] = NextDnsData(**coordinators)
+
+    entry.runtime_data = NextDnsRuntimeData(client=nextdns, profiles=profiles)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -120,3 +144,49 @@ async def async_setup_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> b
 async def async_unload_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> bool:
+    """Migrate old entry."""
+    _LOGGER.debug(
+        "Migrating NextDNS config entry from version %s.%s",
+        entry.version,
+        entry.minor_version,
+    )
+
+    if entry.version == 1 and entry.minor_version == 1:
+        # Migrate from version 1.1 to 2.1 (subentry-based structure)
+        profile_id = entry.data[CONF_PROFILE_ID]
+        profile_name = entry.title
+
+        # Create new data without profile_id
+        new_data = {CONF_API_KEY: entry.data[CONF_API_KEY]}
+
+        hass.config_entries.async_update_entry(
+            entry,
+            data=new_data,
+            title="NextDNS",
+            version=2,
+            minor_version=1,
+        )
+
+        # Create subentry for the profile
+        hass.config_entries.async_add_subentry(
+            entry,
+            ConfigSubentry(
+                data=MappingProxyType(
+                    {CONF_PROFILE_ID: profile_id, CONF_PROFILE_NAME: profile_name}
+                ),
+                subentry_type=SUBENTRY_TYPE_PROFILE,
+                title=profile_name,
+                unique_id=profile_id,
+            ),
+        )
+
+        _LOGGER.debug(
+            "Migration to version %s.%s successful",
+            entry.version,
+            entry.minor_version,
+        )
+
+    return True
