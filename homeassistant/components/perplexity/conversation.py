@@ -1,16 +1,13 @@
 """Conversation platform for Perplexity integration."""
 
-from __future__ import annotations
-
-from dataclasses import dataclass, field
 import re
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from homeassistant.components import conversation
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.json import json_dumps
@@ -18,94 +15,14 @@ from homeassistant.helpers.llm import _get_exposed_entities
 from homeassistant.util.json import JSON_DECODE_EXCEPTIONS, json_loads_object
 
 from . import PerplexityConfigEntry
-from .const import CONF_PROMPT, DOMAIN, LOGGER
+from .const import (
+    ACTION_INSTRUCTIONS,
+    ACTION_RESPONSE_SCHEMA,
+    CONF_PROMPT,
+    DOMAIN,
+    LOGGER,
+)
 from .entity import PerplexityEntity
-
-# JSON schema for structured action response
-ACTION_RESPONSE_SCHEMA: dict[str, Any] = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "assistant_response",
-        "strict": True,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "response": {
-                    "type": "string",
-                    "description": "The text response to show to the user",
-                },
-                "actions": {
-                    "type": ["array", "null"],
-                    "description": "List of Home Assistant actions to execute",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "domain": {
-                                "type": "string",
-                                "description": (
-                                    "The domain of the service "
-                                    "(e.g., light, switch, climate)"
-                                ),
-                            },
-                            "service": {
-                                "type": "string",
-                                "description": (
-                                    "The service to call (e.g., turn_on, turn_off)"
-                                ),
-                            },
-                            "target": {
-                                "type": "string",
-                                "description": "The entity_id to target",
-                            },
-                            "data": {
-                                "type": ["object", "null"],
-                                "description": "Additional service data parameters",
-                            },
-                        },
-                        "required": ["domain", "service", "target", "data"],
-                        "additionalProperties": False,
-                    },
-                },
-            },
-            "required": ["response", "actions"],
-            "additionalProperties": False,
-        },
-    },
-}
-
-# Action instructions for the system prompt
-ACTION_INSTRUCTIONS = """
-You can control Home Assistant devices by including actions in your response.
-When the user asks to control a device, include the appropriate action.
-
-IMPORTANT: You MUST respond with a valid JSON object in this exact format:
-{
-    "response": "Your text response to the user",
-    "actions": [
-        {
-            "domain": "light",
-            "service": "turn_on",
-            "target": "light.living_room",
-            "data": {"brightness": 255}
-        }
-    ]
-}
-
-If no action is needed, set "actions" to null or an empty array [].
-
-Common domains and services:
-- light: turn_on, turn_off, toggle (data: brightness, color_temp, rgb_color)
-- switch: turn_on, turn_off, toggle
-- climate: set_temperature, set_hvac_mode (data: temperature, hvac_mode)
-- cover: open_cover, close_cover, set_cover_position
-- media_player: media_play, media_pause, volume_set (data: volume_level)
-- script: turn_on (to run scripts)
-- scene: turn_on (to activate scenes)
-- fan: turn_on, turn_off, set_percentage (data: percentage)
-
-Always use the entity_id as the target.
-If data is not needed, set it to null.
-"""
 
 
 @dataclass
@@ -255,34 +172,29 @@ class PerplexityConversationEntity(PerplexityEntity, conversation.ConversationEn
         llm_api_ids: list[str],
     ) -> conversation.ConversationResult:
         """Handle conversation with custom action parsing."""
-        # Build system prompt with action instructions and entity context
-        system_prompt_parts: list[str] = []
+        prompt_parts: list[str] = []
 
         # Add base instructions
-        system_prompt_parts.append(llm.DEFAULT_INSTRUCTIONS_PROMPT)
-
-        # Add user prompt if provided
-        if user_prompt:
-            system_prompt_parts.append(user_prompt)
+        prompt_parts.append(user_prompt or llm.DEFAULT_INSTRUCTIONS_PROMPT)
 
         # Add extra system prompt if provided
         if user_input.extra_system_prompt:
-            system_prompt_parts.append(user_input.extra_system_prompt)
+            prompt_parts.append(user_input.extra_system_prompt)
 
         # Add action instructions
-        system_prompt_parts.append(ACTION_INSTRUCTIONS)
+        prompt_parts.append(ACTION_INSTRUCTIONS)
 
         # Generate and add entity context
         entity_context = await self._async_generate_entity_context(llm_api_ids)
         if entity_context:
-            system_prompt_parts.append(f"\nAvailable entities:\n{entity_context}")
+            prompt_parts.append(f"\nAvailable entities:\n{entity_context}")
 
-        system_prompt = "\n".join(system_prompt_parts)
+        prompt = "\n".join(prompt_parts)
 
         # Add system prompt to chat log
         chat_log.content.insert(
             0,
-            conversation.SystemContent(content=system_prompt),
+            conversation.SystemContent(content=prompt),
         )
 
         # Call API with structured JSON response format
@@ -348,28 +260,12 @@ class PerplexityConversationEntity(PerplexityEntity, conversation.ConversationEn
             action.data,
         )
 
-        try:
-            service_data: dict[str, Any] = {"entity_id": action.target}
-            if action.data:
-                service_data.update(action.data)
-            await self.hass.services.async_call(
-                action.domain,
-                action.service,
-                service_data,
-                blocking=True,
-            )
-        except HomeAssistantError as err:
-            LOGGER.warning(
-                "Failed to execute action %s.%s on %s: %s",
-                action.domain,
-                action.service,
-                action.target,
-                err,
-            )
-        except Exception:  # noqa: BLE001
-            LOGGER.exception(
-                "Unexpected error executing action %s.%s on %s",
-                action.domain,
-                action.service,
-                action.target,
-            )
+        service_data: dict[str, Any] = {"entity_id": action.target}
+        if action.data:
+            service_data.update(action.data)
+        await self.hass.services.async_call(
+            action.domain,
+            action.service,
+            service_data,
+            blocking=True,
+        )
