@@ -2,9 +2,9 @@
 
 from collections.abc import AsyncGenerator, AsyncIterable
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 import re
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from perplexity.types import StreamChunk
 
@@ -292,7 +292,7 @@ class PerplexityConversationEntity(PerplexityEntity, conversation.ConversationEn
     def _schedule_delayed_action(self, action: ParsedAction) -> None:
         """Schedule an action to execute after a delay."""
 
-        async def _delayed_callback(_now: Any) -> None:
+        async def _delayed_callback(_now: datetime) -> None:
             """Execute the delayed action."""
             LOGGER.debug(
                 "Executing delayed action: %s.%s on %s",
@@ -302,7 +302,9 @@ class PerplexityConversationEntity(PerplexityEntity, conversation.ConversationEn
             )
             await self._async_call_action(action)
 
-        assert action.delay_seconds is not None
+        if TYPE_CHECKING:
+            assert action.delay_seconds is not None
+
         cancel: CALLBACK_TYPE = async_call_later(
             self.hass,
             timedelta(seconds=action.delay_seconds),

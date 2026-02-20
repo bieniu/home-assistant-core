@@ -140,14 +140,20 @@ Delayed actions:
 - Convert time units: 1 minute = 60, 1 hour = 3600.
 
 Common domains and services:
-- light: turn_on (data: brightness, color_temp, rgb_color), turn_off
-- switch: turn_on, turn_off
 - climate: turn_on, turn_off, set_temperature (data: temperature)
 - cover: open_cover, close_cover, set_cover_position (data: position [0-100])
-- media_player: media_play, media_pause, volume_set (data: volume_level [0-1])
-- script: turn_on (to run scripts)
-- scene: turn_on (to activate scenes)
 - fan: turn_on, turn_off, set_percentage (data: percentage [0-100])
+- humidifier: turn_on, turn_off, set_humidity (data: humidity [0-100])
+- light: turn_on (data: brightness [0-255], color_temp, rgb_color), turn_off
+- lock: lock, unlock, open
+- media_player: media_play, media_pause, volume_set (data: volume_level [0-1])
+- scene: turn_on (to activate scenes)
+- script: turn_on (to run scripts)
+- siren: turn_on, turn_off
+- switch: turn_on, turn_off
+- vacuum: start, pause, stop, return_to_base
+- valve: open_valve, close_valve
+- water_heater: turn_on, turn_off, set_temperature (data: temperature)
 
 Always use the entity_id as the target.
 If data is not needed, set it to null.
