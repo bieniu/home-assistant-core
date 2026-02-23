@@ -149,13 +149,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> 
 async def async_migrate_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> bool:
     """Migrate old entry."""
     _LOGGER.debug(
-        "Migrating NextDNS config entry from version %s.%s",
+        "Migrating NextDNS config entry from version %s",
         entry.version,
-        entry.minor_version,
     )
 
-    if entry.version == 1 and entry.minor_version == 1:
-        # Migrate from version 1.1 to 2.1 (subentry-based structure)
+    if entry.version == 1:
         profile_id = entry.data[CONF_PROFILE_ID]
         profile_name = entry.title
 
@@ -167,10 +165,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) ->
             data=new_data,
             title="NextDNS",
             version=2,
-            minor_version=1,
         )
 
-        # Create subentry for the profile
         hass.config_entries.async_add_subentry(
             entry,
             ConfigSubentry(
@@ -184,9 +180,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) ->
         )
 
         _LOGGER.debug(
-            "Migration to version %s.%s successful",
+            "Migration to version %s successful",
             entry.version,
-            entry.minor_version,
         )
 
     return True
