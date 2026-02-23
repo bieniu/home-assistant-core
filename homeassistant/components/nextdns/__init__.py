@@ -52,12 +52,12 @@ from .coordinator import (
 
 _LOGGER = logging.getLogger(__name__)
 
-type NextDnsConfigEntry = ConfigEntry[NextDnsRuntimeData]
+type NextDnsConfigEntry = ConfigEntry[NextDnsData]
 
 
 @dataclass
-class NextDnsData:
-    """Data for a NextDNS profile."""
+class NextDnsCoordinators:
+    """Coordinators for a NextDNS profile."""
 
     connection: NextDnsUpdateCoordinator[ConnectionStatus]
     dnssec: NextDnsUpdateCoordinator[AnalyticsDnssec]
@@ -69,11 +69,11 @@ class NextDnsData:
 
 
 @dataclass
-class NextDnsRuntimeData:
+class NextDnsData:
     """Runtime data for the NextDNS integration."""
 
     client: NextDns
-    profiles: dict[str, NextDnsData]
+    profiles: dict[str, NextDnsCoordinators]
 
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.SENSOR, Platform.SWITCH]
@@ -111,7 +111,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> b
             translation_placeholders={"entry": entry.title},
         ) from err
 
-    profiles: dict[str, NextDnsData] = {}
+    profiles: dict[str, NextDnsCoordinators] = {}
 
     for subentry_id, subentry in entry.subentries.items():
         if subentry.subentry_type != SUBENTRY_TYPE_PROFILE:
@@ -132,9 +132,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> b
 
         await asyncio.gather(*tasks)
 
-        profiles[subentry_id] = NextDnsData(**coordinators)
+        profiles[subentry_id] = NextDnsCoordinators(**coordinators)
 
-    entry.runtime_data = NextDnsRuntimeData(client=nextdns, profiles=profiles)
+    entry.runtime_data = NextDnsData(client=nextdns, profiles=profiles)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
