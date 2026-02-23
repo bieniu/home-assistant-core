@@ -114,9 +114,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> b
     profiles: dict[str, NextDnsCoordinators] = {}
 
     for subentry_id, subentry in entry.subentries.items():
-        if subentry.subentry_type != SUBENTRY_TYPE_PROFILE:
-            continue
-
         profile_id = subentry.data[CONF_PROFILE_ID]
         tasks = []
         coordinators = {}
