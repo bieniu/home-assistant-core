@@ -69,10 +69,7 @@ def _is_profile_already_configured(hass: HomeAssistant, profile_id: str) -> bool
     """Check if the profile is already configured."""
     for entry in hass.config_entries.async_entries(DOMAIN):
         for subentry in entry.subentries.values():
-            if (
-                subentry.subentry_type == SUBENTRY_TYPE_PROFILE
-                and subentry.data.get(CONF_PROFILE_ID) == profile_id
-            ):
+            if subentry.data[CONF_PROFILE_ID] == profile_id:
                 return True
     return False
 
@@ -81,7 +78,6 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
     """Config flow for NextDNS."""
 
     VERSION = 2
-    MINOR_VERSION = 1
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -97,8 +93,6 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self.api_key = user_input[CONF_API_KEY]
 
-            # Abort if a config entry with this API key already exists
-            # Additional profiles should be added via the subentry flow
             self._async_abort_entries_match({CONF_API_KEY: self.api_key})
 
             try:
@@ -145,12 +139,14 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
                 ],
             )
 
-        available_profiles = [profile.name for profile in self.nextdns.profiles]
-
         return self.async_show_form(
             step_id="profiles",
             data_schema=vol.Schema(
-                {vol.Required(CONF_PROFILE_NAME): vol.In(available_profiles)}
+                {
+                    vol.Required(CONF_PROFILE_NAME): vol.In(
+                        [profile.name for profile in self.nextdns.profiles]
+                    )
+                }
             ),
             errors=errors,
         )
@@ -171,9 +167,7 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             # Get the first profile_id from subentries to validate
             profile_ids = [
-                subentry.data[CONF_PROFILE_ID]
-                for subentry in entry.subentries.values()
-                if subentry.subentry_type == SUBENTRY_TYPE_PROFILE
+                subentry.data[CONF_PROFILE_ID] for subentry in entry.subentries.values()
             ]
             profile_id = profile_ids[0] if profile_ids else None
 
@@ -206,9 +200,7 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             # Get the first profile_id from subentries to validate
             profile_ids = [
-                subentry.data[CONF_PROFILE_ID]
-                for subentry in entry.subentries.values()
-                if subentry.subentry_type == SUBENTRY_TYPE_PROFILE
+                subentry.data[CONF_PROFILE_ID] for subentry in entry.subentries.values()
             ]
             profile_id = profile_ids[0] if profile_ids else None
 
@@ -258,7 +250,6 @@ class ProfileSubentryFlowHandler(ConfigSubentryFlow):
 
         errors: dict[str, str] = {}
 
-        # Initialize the NextDNS client
         self.nextdns = entry.runtime_data.client
 
         if user_input is not None:
