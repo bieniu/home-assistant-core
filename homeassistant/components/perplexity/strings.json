@@ -80,6 +80,7 @@
       "step": {
         "init": {
           "data": {
+            "include_home_location": "Include home location",
             "llm_hass_api": "[%key:common::config_flow::data::llm_hass_api%]",
             "model": "[%key:component::perplexity::config_subentries::ai_task_data::step::user::data::model%]",
             "prompt": "[%key:common::config_flow::data::prompt%]",
@@ -87,6 +88,7 @@
             "web_search": "[%key:component::perplexity::config_subentries::ai_task_data::step::reconfigure::data::web_search%]"
           },
           "data_description": {
+            "include_home_location": "Localize search results based on your home location",
             "llm_hass_api": "The LLM APIs that the conversation agent should have access to control Home Assistant",
             "model": "The model to use for the conversation agent",
             "prompt": "Instruct how the LLM should respond. This can be a template.",

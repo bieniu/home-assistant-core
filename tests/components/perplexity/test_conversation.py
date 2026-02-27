@@ -8,6 +8,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from homeassistant.components import conversation
+from homeassistant.components.perplexity.const import CONF_INCLUDE_HOME_LOCATION
 from homeassistant.components.perplexity.conversation import (
     ParsedAction,
     _parse_json_response,
@@ -795,3 +796,230 @@ async def test_conversation_delayed_action_only(
     assert service_calls[0].domain == "light"
     assert service_calls[0].service == "turn_off"
     assert service_calls[0].data.get("entity_id") == "light.bedroom"
+
+
+@pytest.mark.parametrize(
+    "conversation_subentry_data",
+    [
+        {
+            "model": "sonar",
+            CONF_INCLUDE_HOME_LOCATION: True,
+        }
+    ],
+)
+async def test_conversation_with_home_location(
+    hass: HomeAssistant,
+    mock_perplexity_client: MagicMock,
+    mock_config_entry: MockConfigEntry,
+    mock_stream: MagicMock,
+    mock_chat_log,  # noqa: F811
+) -> None:
+    """Test that home location is included in the system prompt."""
+    hass.config.latitude = 51.5074
+    hass.config.longitude = -0.1278
+    hass.config.country = "GB"
+    hass.config.time_zone = "Europe/London"
+    hass.config.location_name = "Home"
+
+    with patch(
+        "homeassistant.components.perplexity.AsyncPerplexity",
+        return_value=mock_perplexity_client,
+    ):
+        await setup_integration(hass, mock_config_entry)
+
+    mock_perplexity_client.chat.completions.create = AsyncMock(
+        return_value=mock_stream("The weather in London is nice today.")
+    )
+
+    result = await conversation.async_converse(
+        hass,
+        "What's the weather like?",
+        mock_chat_log.conversation_id,
+        Context(),
+        agent_id=CONVERSATION_ENTITY_ID,
+    )
+
+    assert result.response.response_type == intent.IntentResponseType.ACTION_DONE
+
+    # Verify the API was called with location in the system prompt
+    call_args = mock_perplexity_client.chat.completions.create.call_args
+    messages = call_args.kwargs["messages"]
+
+    # Find the system message
+    system_messages = [m for m in messages if m["role"] == "system"]
+    assert system_messages
+    system_content = system_messages[0]["content"]
+    assert "51.507" in system_content
+    assert "-0.128" in system_content
+    assert "GB" in system_content
+
+
+@pytest.mark.parametrize(
+    "conversation_subentry_data",
+    [
+        {
+            "model": "sonar",
+            CONF_INCLUDE_HOME_LOCATION: False,
+        }
+    ],
+)
+async def test_conversation_without_home_location(
+    hass: HomeAssistant,
+    mock_perplexity_client: MagicMock,
+    mock_config_entry: MockConfigEntry,
+    mock_stream: MagicMock,
+    mock_chat_log,  # noqa: F811
+) -> None:
+    """Test that home location is not included when disabled."""
+    hass.config.latitude = 51.5074
+    hass.config.longitude = -0.1278
+    hass.config.country = "GB"
+
+    with patch(
+        "homeassistant.components.perplexity.AsyncPerplexity",
+        return_value=mock_perplexity_client,
+    ):
+        await setup_integration(hass, mock_config_entry)
+
+    mock_perplexity_client.chat.completions.create = AsyncMock(
+        return_value=mock_stream("I can help with that.")
+    )
+
+    result = await conversation.async_converse(
+        hass,
+        "What's the weather like?",
+        mock_chat_log.conversation_id,
+        Context(),
+        agent_id=CONVERSATION_ENTITY_ID,
+    )
+
+    assert result.response.response_type == intent.IntentResponseType.ACTION_DONE
+
+    # Verify the API was called without location in the system prompt
+    call_args = mock_perplexity_client.chat.completions.create.call_args
+    messages = call_args.kwargs["messages"]
+
+    system_messages = [m for m in messages if m["role"] == "system"]
+    for msg in system_messages:
+        assert "51.507" not in msg["content"]
+
+
+@pytest.mark.parametrize(
+    "conversation_subentry_data",
+    [
+        {
+            "model": "sonar",
+            "llm_hass_api": ["assist"],
+            CONF_INCLUDE_HOME_LOCATION: True,
+        },
+    ],
+)
+async def test_conversation_with_home_location_and_actions(
+    hass: HomeAssistant,
+    mock_perplexity_client: MagicMock,
+    mock_config_entry: MockConfigEntry,
+    mock_stream: MagicMock,
+    mock_chat_log,  # noqa: F811
+    service_calls: list,
+) -> None:
+    """Test that home location is included when actions are enabled."""
+    hass.config.latitude = 40.7128
+    hass.config.longitude = -74.0060
+    hass.config.country = "US"
+
+    with patch(
+        "homeassistant.components.perplexity.AsyncPerplexity",
+        return_value=mock_perplexity_client,
+    ):
+        await setup_integration(hass, mock_config_entry)
+
+    hass.states.async_set("light.living_room", "off")
+
+    json_response = json.dumps(
+        {
+            "response": "It's cold in New York, I've turned on the heater.",
+            "actions": [
+                {
+                    "domain": "light",
+                    "service": "turn_on",
+                    "target": "light.living_room",
+                    "data": None,
+                }
+            ],
+        }
+    )
+    mock_perplexity_client.chat.completions.create = AsyncMock(
+        return_value=mock_stream(json_response)
+    )
+
+    result = await conversation.async_converse(
+        hass,
+        "It's cold, turn on the light",
+        mock_chat_log.conversation_id,
+        Context(),
+        agent_id=CONVERSATION_ENTITY_ID,
+    )
+
+    assert result.response.response_type == intent.IntentResponseType.ACTION_DONE
+
+    # Verify the API was called with location in the system prompt
+    call_args = mock_perplexity_client.chat.completions.create.call_args
+    messages = call_args.kwargs["messages"]
+
+    system_messages = [m for m in messages if m["role"] == "system"]
+    assert system_messages
+    system_content = system_messages[0]["content"]
+    assert "40.713" in system_content
+    assert "-74.006" in system_content
+    assert "US" in system_content
+
+
+@pytest.mark.parametrize(
+    "conversation_subentry_data",
+    [
+        {
+            "model": "sonar",
+            CONF_INCLUDE_HOME_LOCATION: True,
+        }
+    ],
+)
+async def test_conversation_home_location_partial_config(
+    hass: HomeAssistant,
+    mock_perplexity_client: MagicMock,
+    mock_config_entry: MockConfigEntry,
+    mock_stream: MagicMock,
+    mock_chat_log,  # noqa: F811
+) -> None:
+    """Test home location with only coordinates configured."""
+    hass.config.latitude = 48.8566
+    hass.config.longitude = 2.3522
+    hass.config.country = None
+
+    with patch(
+        "homeassistant.components.perplexity.AsyncPerplexity",
+        return_value=mock_perplexity_client,
+    ):
+        await setup_integration(hass, mock_config_entry)
+
+    mock_perplexity_client.chat.completions.create = AsyncMock(
+        return_value=mock_stream("Here is the information.")
+    )
+
+    await conversation.async_converse(
+        hass,
+        "Tell me about nearby restaurants",
+        mock_chat_log.conversation_id,
+        Context(),
+        agent_id=CONVERSATION_ENTITY_ID,
+    )
+
+    call_args = mock_perplexity_client.chat.completions.create.call_args
+    messages = call_args.kwargs["messages"]
+
+    system_messages = [m for m in messages if m["role"] == "system"]
+    assert system_messages
+    system_content = system_messages[0]["content"]
+    assert "48.857" in system_content
+    assert "2.352" in system_content
+    # Country should not appear since it's None
+    assert "Country:" not in system_content

@@ -6,6 +6,7 @@ from perplexity import AuthenticationError, PerplexityError
 
 from homeassistant.components.perplexity.config_flow import PerplexityConfigFlow
 from homeassistant.components.perplexity.const import (
+    CONF_INCLUDE_HOME_LOCATION,
     CONF_REASONING_EFFORT,
     CONF_WEB_SEARCH,
     DOMAIN,
@@ -719,3 +720,89 @@ async def test_conversation_subentry_reconfigure_web_search_and_reasoning(
     subentry = mock_setup_entry.subentries[conversation_subentry_id]
     assert subentry.data[CONF_WEB_SEARCH] is True
     assert subentry.data[CONF_REASONING_EFFORT] == "high"
+
+
+async def test_conversation_subentry_flow_with_home_location(
+    hass: HomeAssistant,
+    mock_setup_entry: MockConfigEntry,
+) -> None:
+    """Test conversation subentry flow with home location enabled."""
+    result = await hass.config_entries.subentries.async_init(
+        (mock_setup_entry.entry_id, "conversation"),
+        context={"source": SOURCE_USER},
+    )
+    assert result["type"] is FlowResultType.FORM
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_MODEL: "sonar",
+            CONF_LLM_HASS_API: [],
+            CONF_WEB_SEARCH: True,
+            CONF_INCLUDE_HOME_LOCATION: True,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_INCLUDE_HOME_LOCATION] is True
+    assert result["data"][CONF_WEB_SEARCH] is True
+
+
+async def test_conversation_subentry_reconfigure_home_location(
+    hass: HomeAssistant,
+    mock_setup_entry: MockConfigEntry,
+) -> None:
+    """Test conversation subentry reconfigure toggling home location."""
+    # First create a conversation subentry without home location
+    result = await hass.config_entries.subentries.async_init(
+        (mock_setup_entry.entry_id, "conversation"),
+        context={"source": SOURCE_USER},
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_MODEL: "sonar",
+            CONF_LLM_HASS_API: [],
+            CONF_WEB_SEARCH: False,
+            CONF_INCLUDE_HOME_LOCATION: False,
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_INCLUDE_HOME_LOCATION] is False
+
+    # Find the conversation subentry
+    conversation_subentry_id = None
+    for subentry_id, subentry in mock_setup_entry.subentries.items():
+        if (
+            subentry.subentry_type == "conversation"
+            and subentry.data.get(CONF_MODEL) == "sonar"
+            and subentry.data.get(CONF_INCLUDE_HOME_LOCATION) is False
+        ):
+            conversation_subentry_id = subentry_id
+            break
+
+    assert conversation_subentry_id is not None
+
+    # Reconfigure to enable home location
+    result = await mock_setup_entry.start_subentry_reconfigure_flow(
+        hass, conversation_subentry_id
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_MODEL: "sonar",
+            CONF_LLM_HASS_API: [],
+            CONF_WEB_SEARCH: True,
+            CONF_INCLUDE_HOME_LOCATION: True,
+        },
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+
+    subentry = mock_setup_entry.subentries[conversation_subentry_id]
+    assert subentry.data[CONF_INCLUDE_HOME_LOCATION] is True
+    assert subentry.data[CONF_WEB_SEARCH] is True
