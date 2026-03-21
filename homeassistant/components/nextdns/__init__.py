@@ -24,6 +24,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import CONF_API_KEY, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
@@ -165,17 +166,29 @@ async def async_migrate_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) ->
             unique_id=None,
         )
 
-        hass.config_entries.async_add_subentry(
-            entry,
-            ConfigSubentry(
-                data=MappingProxyType(
-                    {CONF_PROFILE_ID: profile_id, CONF_PROFILE_NAME: profile_name}
-                ),
-                subentry_type=SUBENTRY_TYPE_PROFILE,
-                title=profile_name,
-                unique_id=profile_id,
+        subentry = ConfigSubentry(
+            data=MappingProxyType(
+                {CONF_PROFILE_ID: profile_id, CONF_PROFILE_NAME: profile_name}
             ),
+            subentry_type=SUBENTRY_TYPE_PROFILE,
+            title=profile_name,
+            unique_id=profile_id,
         )
+        hass.config_entries.async_add_subentry(entry, subentry)
+
+        # Migrate device to use new identifiers and subentry association
+        device_registry = dr.async_get(hass)
+        if device := device_registry.async_get_device(
+            identifiers={(DOMAIN, profile_id)}
+        ):
+            device_registry.async_update_device(
+                device.id,
+                new_identifiers={(DOMAIN, f"{entry.entry_id}_{subentry.subentry_id}")},
+                add_config_entry_id=entry.entry_id,
+                add_config_subentry_id=subentry.subentry_id,
+                remove_config_entry_id=entry.entry_id,
+                remove_config_subentry_id=None,
+            )
 
         _LOGGER.debug(
             "Migration to version %s successful",

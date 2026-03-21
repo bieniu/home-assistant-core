@@ -15,6 +15,7 @@ from homeassistant.components.nextdns.const import (
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.const import CONF_API_KEY, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
 from . import init_integration
 
@@ -100,7 +101,19 @@ async def test_migrate_entry_v1_to_v2(
     mock_nextdns_client: AsyncMock,
 ) -> None:
     """Test migration from version 1 to version 2."""
-    await init_integration(hass, mock_config_entry_v1)
+    # Create old device with old-style identifiers before migration
+    device_registry = dr.async_get(hass)
+    mock_config_entry_v1.add_to_hass(hass)
+    device_registry.async_get_or_create(
+        config_entry_id=mock_config_entry_v1.entry_id,
+        identifiers={(DOMAIN, "xyz12")},
+        manufacturer="NextDNS Inc.",
+        name="Fake Profile",
+        entry_type=dr.DeviceEntryType.SERVICE,
+    )
+
+    await hass.config_entries.async_setup(mock_config_entry_v1.entry_id)
+    await hass.async_block_till_done()
 
     # Verify migration was successful
     assert mock_config_entry_v1.version == 2
@@ -120,3 +133,18 @@ async def test_migrate_entry_v1_to_v2(
     assert subentry.data[CONF_PROFILE_ID] == "xyz12"
     assert subentry.data[CONF_PROFILE_NAME] == "Fake Profile"
     assert subentry.unique_id == "xyz12"
+
+    # Verify device was migrated to new identifiers and subentry
+    device = device_registry.async_get_device(
+        identifiers={
+            (DOMAIN, f"{mock_config_entry_v1.entry_id}_{subentry.subentry_id}")
+        }
+    )
+    assert device is not None
+    assert device.config_entries_subentries == {
+        mock_config_entry_v1.entry_id: {subentry.subentry_id}
+    }
+
+    # Verify old device no longer exists
+    old_device = device_registry.async_get_device(identifiers={(DOMAIN, "xyz12")})
+    assert old_device is None
