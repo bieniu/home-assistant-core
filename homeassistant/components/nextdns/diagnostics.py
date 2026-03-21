@@ -19,7 +19,8 @@ async def async_get_config_entry_diagnostics(
     """Return diagnostics for a config entry."""
     profiles_data = {}
     for subentry_id, profile_data in config_entry.runtime_data.profiles.items():
-        profiles_data[subentry_id] = {
+        subentry = config_entry.subentries[subentry_id]
+        profiles_data[subentry.title] = {
             "dnssec_coordinator_data": asdict(profile_data.dnssec.data),
             "encryption_coordinator_data": asdict(profile_data.encryption.data),
             "ip_versions_coordinator_data": asdict(profile_data.ip_versions.data),
