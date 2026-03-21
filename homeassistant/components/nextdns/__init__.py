@@ -24,8 +24,9 @@ from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import CONF_API_KEY, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     ATTR_CONNECTION,
@@ -89,6 +90,90 @@ COORDINATORS: list[tuple[str, type[NextDnsUpdateCoordinator]]] = [
 ]
 
 
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up NextDNS."""
+    await async_migrate_integration(hass)
+    return True
+
+
+async def async_migrate_integration(hass: HomeAssistant) -> None:
+    """Migrate integration entry structure."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not any(entry.version == 1 for entry in entries):
+        return
+
+    api_keys_entries: dict[str, NextDnsConfigEntry] = {}
+    device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
+
+    for entry in entries:
+        use_existing = False
+        profile_id = entry.data[CONF_PROFILE_ID]
+        profile_name = entry.title
+
+        subentry = ConfigSubentry(
+            data=MappingProxyType(
+                {CONF_PROFILE_ID: profile_id, CONF_PROFILE_NAME: profile_name}
+            ),
+            subentry_type=SUBENTRY_TYPE_PROFILE,
+            title=profile_name,
+            unique_id=profile_id,
+        )
+
+        if entry.data[CONF_API_KEY] not in api_keys_entries:
+            use_existing = True
+            api_keys_entries[entry.data[CONF_API_KEY]] = entry
+
+        parent_entry = api_keys_entries[entry.data[CONF_API_KEY]]
+
+        hass.config_entries.async_add_subentry(parent_entry, subentry)
+
+        # Migrate device identifiers and subentry association
+        device = device_registry.async_get_device(identifiers={(DOMAIN, profile_id)})
+        if device is not None:
+            device_registry.async_update_device(
+                device.id,
+                new_identifiers={
+                    (DOMAIN, f"{parent_entry.entry_id}_{subentry.subentry_id}")
+                },
+                add_config_subentry_id=subentry.subentry_id,
+                add_config_entry_id=parent_entry.entry_id,
+            )
+            if parent_entry.entry_id != entry.entry_id:
+                device_registry.async_update_device(
+                    device.id,
+                    remove_config_entry_id=entry.entry_id,
+                )
+            else:
+                device_registry.async_update_device(
+                    device.id,
+                    remove_config_entry_id=entry.entry_id,
+                    remove_config_subentry_id=None,
+                )
+
+        # Migrate entities to parent entry and subentry
+        if parent_entry.entry_id != entry.entry_id:
+            for entity in er.async_entries_for_config_entry(
+                entity_registry, entry.entry_id
+            ):
+                entity_registry.async_update_entity(
+                    entity.entity_id,
+                    config_entry_id=parent_entry.entry_id,
+                    config_subentry_id=subentry.subentry_id,
+                )
+
+        if not use_existing:
+            await hass.config_entries.async_remove(entry.entry_id)
+        else:
+            hass.config_entries.async_update_entry(
+                entry,
+                data={CONF_API_KEY: entry.data[CONF_API_KEY]},
+                title="NextDNS",
+                version=2,
+                unique_id=None,
+            )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> bool:
     """Set up NextDNS as config entry."""
     api_key = entry.data[CONF_API_KEY]
@@ -142,57 +227,3 @@ async def async_setup_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> b
 async def async_unload_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-
-async def async_migrate_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) -> bool:
-    """Migrate old entry."""
-    _LOGGER.debug(
-        "Migrating NextDNS config entry from version %s",
-        entry.version,
-    )
-
-    if entry.version == 1:
-        profile_id = entry.data[CONF_PROFILE_ID]
-        profile_name = entry.title
-
-        # Create new data without profile_id
-        new_data = {CONF_API_KEY: entry.data[CONF_API_KEY]}
-
-        hass.config_entries.async_update_entry(
-            entry,
-            data=new_data,
-            title="NextDNS",
-            version=2,
-            unique_id=None,
-        )
-
-        subentry = ConfigSubentry(
-            data=MappingProxyType(
-                {CONF_PROFILE_ID: profile_id, CONF_PROFILE_NAME: profile_name}
-            ),
-            subentry_type=SUBENTRY_TYPE_PROFILE,
-            title=profile_name,
-            unique_id=profile_id,
-        )
-        hass.config_entries.async_add_subentry(entry, subentry)
-
-        # Migrate device to use new identifiers and subentry association
-        device_registry = dr.async_get(hass)
-        if device := device_registry.async_get_device(
-            identifiers={(DOMAIN, profile_id)}
-        ):
-            device_registry.async_update_device(
-                device.id,
-                new_identifiers={(DOMAIN, f"{entry.entry_id}_{subentry.subentry_id}")},
-                add_config_entry_id=entry.entry_id,
-                add_config_subentry_id=subentry.subentry_id,
-                remove_config_entry_id=entry.entry_id,
-                remove_config_subentry_id=None,
-            )
-
-        _LOGGER.debug(
-            "Migration to version %s successful",
-            entry.version,
-        )
-
-    return True

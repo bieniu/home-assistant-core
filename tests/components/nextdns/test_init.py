@@ -15,7 +15,7 @@ from homeassistant.components.nextdns.const import (
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.const import CONF_API_KEY, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from . import init_integration
 
@@ -148,3 +148,95 @@ async def test_migrate_entry_v1_to_v2(
     # Verify old device no longer exists
     old_device = device_registry.async_get_device(identifiers={(DOMAIN, "xyz12")})
     assert old_device is None
+
+
+async def test_migrate_entry_v1_to_v2_merge_same_api_key(
+    hass: HomeAssistant,
+    mock_nextdns_client: AsyncMock,
+) -> None:
+    """Test migration merges v1 entries with the same API key."""
+    entry1 = MockConfigEntry(
+        domain=DOMAIN,
+        title="Profile One",
+        unique_id="abc11",
+        data={CONF_API_KEY: "fake_api_key", CONF_PROFILE_ID: "abc11"},
+        entry_id="entry1_id",
+        version=1,
+        minor_version=1,
+    )
+    entry2 = MockConfigEntry(
+        domain=DOMAIN,
+        title="Profile Two",
+        unique_id="def22",
+        data={CONF_API_KEY: "fake_api_key", CONF_PROFILE_ID: "def22"},
+        entry_id="entry2_id",
+        version=1,
+        minor_version=1,
+    )
+    entry1.add_to_hass(hass)
+    entry2.add_to_hass(hass)
+
+    # Create old devices with old-style identifiers
+    device_registry = dr.async_get(hass)
+    device_registry.async_get_or_create(
+        config_entry_id=entry1.entry_id,
+        identifiers={(DOMAIN, "abc11")},
+        manufacturer="NextDNS Inc.",
+        name="Profile One",
+        entry_type=dr.DeviceEntryType.SERVICE,
+    )
+    device_registry.async_get_or_create(
+        config_entry_id=entry2.entry_id,
+        identifiers={(DOMAIN, "def22")},
+        manufacturer="NextDNS Inc.",
+        name="Profile Two",
+        entry_type=dr.DeviceEntryType.SERVICE,
+    )
+
+    # Create old entities for entry2 to verify they are migrated
+    entity_registry = er.async_get(hass)
+    entity_registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "def22_dns_queries",
+        config_entry=entry2,
+    )
+
+    await hass.config_entries.async_setup(entry1.entry_id)
+    await hass.async_block_till_done()
+
+    # Verify entry1 was migrated and is loaded
+    assert entry1.version == 2
+    assert entry1.title == "NextDNS"
+    assert entry1.state is ConfigEntryState.LOADED
+    assert CONF_PROFILE_ID not in entry1.data
+    assert entry1.data[CONF_API_KEY] == "fake_api_key"
+
+    # Verify entry2 was removed
+    assert hass.config_entries.async_get_entry(entry2.entry_id) is None
+
+    # Verify entry1 has two subentries (both profiles merged)
+    assert len(entry1.subentries) == 2
+    subentries = list(entry1.subentries.values())
+    profile_ids = {s.data[CONF_PROFILE_ID] for s in subentries}
+    assert profile_ids == {"abc11", "def22"}
+    titles = {s.title for s in subentries}
+    assert titles == {"Profile One", "Profile Two"}
+
+    # Verify devices were migrated to new identifiers under entry1
+    for sub in subentries:
+        device = device_registry.async_get_device(
+            identifiers={(DOMAIN, f"{entry1.entry_id}_{sub.subentry_id}")}
+        )
+        assert device is not None
+        assert entry1.entry_id in device.config_entries
+
+    # Verify old devices no longer exist
+    assert device_registry.async_get_device(identifiers={(DOMAIN, "abc11")}) is None
+    assert device_registry.async_get_device(identifiers={(DOMAIN, "def22")}) is None
+
+    # Verify entity from entry2 was migrated to entry1
+    entity_entry = entity_registry.async_get("sensor.nextdns_def22_dns_queries")
+    assert entity_entry is not None
+    assert entity_entry.config_entry_id == entry1.entry_id
+    assert entity_entry.config_subentry_id is not None
