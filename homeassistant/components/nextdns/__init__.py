@@ -162,6 +162,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: NextDnsConfigEntry) ->
             data=new_data,
             title="NextDNS",
             version=2,
+            unique_id=None,
         )
 
         hass.config_entries.async_add_subentry(
