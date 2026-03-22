@@ -19,7 +19,6 @@
         dict({
           'data': dict({
             'profile_id': '**REDACTED**',
-            'profile_name': 'Fake Profile',
           }),
           'subentry_type': 'profile',
           'title': 'Fake Profile',

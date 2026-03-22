@@ -8,7 +8,6 @@ from tenacity import RetryError
 
 from homeassistant.components.nextdns.const import (
     CONF_PROFILE_ID,
-    CONF_PROFILE_NAME,
     DOMAIN,
     SUBENTRY_TYPE_PROFILE,
 )
@@ -131,7 +130,6 @@ async def test_migrate_entry_v1_to_v2(
     assert subentry.subentry_type == SUBENTRY_TYPE_PROFILE
     assert subentry.title == "Fake Profile"
     assert subentry.data[CONF_PROFILE_ID] == "xyz12"
-    assert subentry.data[CONF_PROFILE_NAME] == "Fake Profile"
     assert subentry.unique_id == "xyz12"
 
     # Verify device was migrated to new identifiers and subentry

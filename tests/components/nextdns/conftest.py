@@ -17,7 +17,6 @@ import pytest
 
 from homeassistant.components.nextdns.const import (
     CONF_PROFILE_ID,
-    CONF_PROFILE_NAME,
     DOMAIN,
     SUBENTRY_TYPE_PROFILE,
 )
@@ -57,7 +56,7 @@ def mock_subentries() -> list[ConfigSubentryData]:
     """Return a list of mock subentries."""
     return [
         ConfigSubentryData(
-            data={CONF_PROFILE_ID: "xyz12", CONF_PROFILE_NAME: "Fake Profile"},
+            data={CONF_PROFILE_ID: "xyz12"},
             subentry_type=SUBENTRY_TYPE_PROFILE,
             title="Fake Profile",
             unique_id="xyz12",

@@ -17,12 +17,12 @@ from homeassistant.config_entries import (
     ConfigSubentryFlow,
     SubentryFlowResult,
 )
-from homeassistant.const import CONF_API_KEY
+from homeassistant.const import CONF_API_KEY, CONF_PROFILE_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_PROFILE_ID, CONF_PROFILE_NAME, DOMAIN, SUBENTRY_TYPE_PROFILE
+from .const import CONF_PROFILE_ID, DOMAIN, SUBENTRY_TYPE_PROFILE
 
 AUTH_SCHEMA = vol.Schema({vol.Required(CONF_API_KEY): str})
 
@@ -129,10 +129,7 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
                 subentries=[
                     {
                         "subentry_type": SUBENTRY_TYPE_PROFILE,
-                        "data": {
-                            CONF_PROFILE_ID: profile_id,
-                            CONF_PROFILE_NAME: profile_name,
-                        },
+                        "data": {CONF_PROFILE_ID: profile_id},
                         "title": profile_name,
                         "unique_id": profile_id,
                     },
@@ -261,10 +258,7 @@ class ProfileSubentryFlowHandler(ConfigSubentryFlow):
             else:
                 return self.async_create_entry(
                     title=profile_name,
-                    data={
-                        CONF_PROFILE_ID: profile_id,
-                        CONF_PROFILE_NAME: profile_name,
-                    },
+                    data={CONF_PROFILE_ID: profile_id},
                     unique_id=profile_id,
                 )
 

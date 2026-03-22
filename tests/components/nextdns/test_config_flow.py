@@ -9,12 +9,11 @@ from tenacity import RetryError
 
 from homeassistant.components.nextdns.const import (
     CONF_PROFILE_ID,
-    CONF_PROFILE_NAME,
     DOMAIN,
     SUBENTRY_TYPE_PROFILE,
 )
 from homeassistant.config_entries import SOURCE_USER, ConfigSubentry
-from homeassistant.const import CONF_API_KEY
+from homeassistant.const import CONF_API_KEY, CONF_PROFILE_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
@@ -57,7 +56,6 @@ async def test_form_create_entry(
     assert subentry["subentry_type"] == SUBENTRY_TYPE_PROFILE
     assert subentry["title"] == "Fake Profile"
     assert subentry["data"][CONF_PROFILE_ID] == "xyz12"
-    assert subentry["data"][CONF_PROFILE_NAME] == "Fake Profile"
     assert len(mock_setup_entry.mock_calls) == 1
 
 
@@ -344,8 +342,8 @@ async def test_subentry_flow(
         ProfileInfo(id="xyz12", fingerprint="xyz12", name="Fake Profile"),
         ProfileInfo(id="abc34", fingerprint="abc34", name="Second Profile"),
     ]
-    mock_nextdns_client.get_profile_id = (
-        lambda name: "abc34" if name == "Second Profile" else "xyz12"
+    mock_nextdns_client.get_profile_id = lambda name: (
+        "abc34" if name == "Second Profile" else "xyz12"
     )
 
     await init_integration(hass, mock_config_entry)
@@ -367,7 +365,6 @@ async def test_subentry_flow(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Second Profile"
     assert result["data"][CONF_PROFILE_ID] == "abc34"
-    assert result["data"][CONF_PROFILE_NAME] == "Second Profile"
 
     entry = hass.config_entries.async_get_entry(mock_config_entry.entry_id)
     assert len(entry.subentries) == 2
@@ -405,9 +402,7 @@ async def test_subentry_flow_already_configured(
     hass.config_entries.async_add_subentry(
         mock_config_entry,
         ConfigSubentry(
-            data=MappingProxyType(
-                {CONF_PROFILE_ID: "abc34", CONF_PROFILE_NAME: "Second Profile"}
-            ),
+            data=MappingProxyType({CONF_PROFILE_ID: "abc34"}),
             subentry_type=SUBENTRY_TYPE_PROFILE,
             title="Second Profile",
             unique_id="abc34",

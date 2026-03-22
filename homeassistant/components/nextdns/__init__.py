@@ -37,7 +37,6 @@ from .const import (
     ATTR_SETTINGS,
     ATTR_STATUS,
     CONF_PROFILE_ID,
-    CONF_PROFILE_NAME,
     DOMAIN,
     SUBENTRY_TYPE_PROFILE,
 )
@@ -112,9 +111,7 @@ async def async_migrate_integration(hass: HomeAssistant) -> None:
         profile_name = entry.title
 
         subentry = ConfigSubentry(
-            data=MappingProxyType(
-                {CONF_PROFILE_ID: profile_id, CONF_PROFILE_NAME: profile_name}
-            ),
+            data=MappingProxyType({CONF_PROFILE_ID: profile_id}),
             subentry_type=SUBENTRY_TYPE_PROFILE,
             title=profile_name,
             unique_id=profile_id,

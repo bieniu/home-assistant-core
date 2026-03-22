@@ -11,7 +11,6 @@ ATTR_SETTINGS = "settings"
 ATTR_STATUS = "status"
 
 CONF_PROFILE_ID = "profile_id"
-CONF_PROFILE_NAME = "profile_name"
 
 SUBENTRY_TYPE_PROFILE = "profile"
 

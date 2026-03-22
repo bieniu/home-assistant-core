@@ -6,7 +6,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_PROFILE_NAME, DOMAIN
+from .const import DOMAIN
 from .coordinator import NextDnsUpdateCoordinator
 
 
@@ -35,7 +35,7 @@ class NextDnsEntity[CoordinatorDataT: NextDnsData](
                 )
             },
             manufacturer="NextDNS Inc.",
-            name=subentry.data.get(CONF_PROFILE_NAME, subentry.title),
+            name=subentry.title,
         )
         self._attr_unique_id = f"{coordinator.profile_id}_{description.key}"
         self.entity_description = description
