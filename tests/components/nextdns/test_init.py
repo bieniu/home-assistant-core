@@ -120,7 +120,6 @@ async def test_migrate_entry_v1_to_v2(
 
     # Verify migration was successful
     assert mock_config_entry_v1.version == 2
-    assert mock_config_entry_v1.minor_version == 1
     assert mock_config_entry_v1.title == "NextDNS"
     assert mock_config_entry_v1.state is ConfigEntryState.LOADED
 
@@ -164,7 +163,6 @@ async def test_migrate_entry_v1_to_v2_merge_same_api_key(
         data={CONF_API_KEY: "fake_api_key", CONF_PROFILE_ID: "abc11"},
         entry_id="entry1_id",
         version=1,
-        minor_version=1,
     )
     entry2 = MockConfigEntry(
         domain=DOMAIN,
@@ -173,7 +171,6 @@ async def test_migrate_entry_v1_to_v2_merge_same_api_key(
         data={CONF_API_KEY: "fake_api_key", CONF_PROFILE_ID: "def22"},
         entry_id="entry2_id",
         version=1,
-        minor_version=1,
     )
     entry1.add_to_hass(hass)
     entry2.add_to_hass(hass)
@@ -200,7 +197,7 @@ async def test_migrate_entry_v1_to_v2_merge_same_api_key(
     entity_registry.async_get_or_create(
         "sensor",
         DOMAIN,
-        "def22_dns_queries",
+        "profile_two_dns_queries",
         config_entry=entry2,
     )
 
@@ -238,7 +235,7 @@ async def test_migrate_entry_v1_to_v2_merge_same_api_key(
     assert device_registry.async_get_device(identifiers={(DOMAIN, "def22")}) is None
 
     # Verify entity from entry2 was migrated to entry1
-    entity_entry = entity_registry.async_get("sensor.nextdns_def22_dns_queries")
+    entity_entry = entity_registry.async_get("sensor.nextdns_profile_two_dns_queries")
     assert entity_entry is not None
     assert entity_entry.config_entry_id == entry1.entry_id
     assert entity_entry.config_subentry_id is not None
@@ -256,7 +253,6 @@ async def test_migrate_entry_v1_to_v2_disabled_entry(
         data={CONF_API_KEY: "fake_api_key", CONF_PROFILE_ID: "abc11"},
         entry_id="entry1_id",
         version=1,
-        minor_version=1,
     )
     entry2 = MockConfigEntry(
         domain=DOMAIN,
@@ -265,7 +261,6 @@ async def test_migrate_entry_v1_to_v2_disabled_entry(
         data={CONF_API_KEY: "fake_api_key", CONF_PROFILE_ID: "def22"},
         entry_id="entry2_id",
         version=1,
-        minor_version=1,
         disabled_by=ConfigEntryDisabler.USER,
     )
     entry1.add_to_hass(hass)
@@ -295,7 +290,7 @@ async def test_migrate_entry_v1_to_v2_disabled_entry(
     entity_registry.async_get_or_create(
         "sensor",
         DOMAIN,
-        "def22_dns_queries",
+        "profile_two_dns_queries",
         config_entry=entry2,
         device_id=device2.id,
         disabled_by=er.RegistryEntryDisabler.CONFIG_ENTRY,
@@ -322,7 +317,7 @@ async def test_migrate_entry_v1_to_v2_disabled_entry(
     assert device.disabled_by is dr.DeviceEntryDisabler.USER
 
     # Verify entity disabled_by was changed from CONFIG_ENTRY to DEVICE
-    entity_entry = entity_registry.async_get("sensor.nextdns_def22_dns_queries")
+    entity_entry = entity_registry.async_get("sensor.nextdns_profile_two_dns_queries")
     assert entity_entry is not None
     assert entity_entry.config_entry_id == entry1.entry_id
     assert entity_entry.config_subentry_id == subentry2.subentry_id

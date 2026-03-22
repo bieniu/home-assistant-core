@@ -73,7 +73,6 @@ def mock_config_entry(mock_subentries: list[ConfigSubentryData]) -> MockConfigEn
         data={CONF_API_KEY: "fake_api_key"},
         entry_id="d9aa37407ddac7b964a99e86312288d6",
         version=2,
-        minor_version=1,
         subentries_data=mock_subentries,
     )
 
@@ -88,7 +87,6 @@ def mock_config_entry_v1() -> MockConfigEntry:
         data={CONF_API_KEY: "fake_api_key", CONF_PROFILE_ID: "xyz12"},
         entry_id="d9aa37407ddac7b964a99e86312288d6",
         version=1,
-        minor_version=1,
     )
 
 
