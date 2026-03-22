@@ -2,7 +2,6 @@
 
 import asyncio
 from dataclasses import dataclass
-import logging
 from types import MappingProxyType
 
 from aiohttp.client_exceptions import ClientConnectorError
@@ -50,8 +49,6 @@ from .coordinator import (
     NextDnsStatusUpdateCoordinator,
     NextDnsUpdateCoordinator,
 )
-
-_LOGGER = logging.getLogger(__name__)
 
 type NextDnsConfigEntry = ConfigEntry[NextDnsData]
 
@@ -156,7 +153,6 @@ async def async_migrate_integration(hass: HomeAssistant) -> None:
                 disabled_by=entity_disabled_by,
             )
 
-        # Migrate device identifiers and subentry association
         if device is not None:
             # Device and entity registries don't update the disabled_by flag when
             # moving a device or entity from one config entry to another, so we
