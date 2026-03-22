@@ -11,7 +11,11 @@ from homeassistant.components.nextdns.const import (
     DOMAIN,
     SUBENTRY_TYPE_PROFILE,
 )
-from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
+from homeassistant.config_entries import (
+    SOURCE_REAUTH,
+    ConfigEntryDisabler,
+    ConfigEntryState,
+)
 from homeassistant.const import CONF_API_KEY, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -238,3 +242,88 @@ async def test_migrate_entry_v1_to_v2_merge_same_api_key(
     assert entity_entry is not None
     assert entity_entry.config_entry_id == entry1.entry_id
     assert entity_entry.config_subentry_id is not None
+
+
+async def test_migrate_entry_v1_to_v2_disabled_entry(
+    hass: HomeAssistant,
+    mock_nextdns_client: AsyncMock,
+) -> None:
+    """Test migration updates disabled_by when merging disabled and enabled entries."""
+    entry1 = MockConfigEntry(
+        domain=DOMAIN,
+        title="Profile One",
+        unique_id="abc11",
+        data={CONF_API_KEY: "fake_api_key", CONF_PROFILE_ID: "abc11"},
+        entry_id="entry1_id",
+        version=1,
+        minor_version=1,
+    )
+    entry2 = MockConfigEntry(
+        domain=DOMAIN,
+        title="Profile Two",
+        unique_id="def22",
+        data={CONF_API_KEY: "fake_api_key", CONF_PROFILE_ID: "def22"},
+        entry_id="entry2_id",
+        version=1,
+        minor_version=1,
+        disabled_by=ConfigEntryDisabler.USER,
+    )
+    entry1.add_to_hass(hass)
+    entry2.add_to_hass(hass)
+
+    # Create device and entity for disabled entry2 with CONFIG_ENTRY disabled_by
+    device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
+
+    device_registry.async_get_or_create(
+        config_entry_id=entry1.entry_id,
+        identifiers={(DOMAIN, "abc11")},
+        manufacturer="NextDNS Inc.",
+        name="Profile One",
+        entry_type=dr.DeviceEntryType.SERVICE,
+    )
+
+    device2 = device_registry.async_get_or_create(
+        config_entry_id=entry2.entry_id,
+        identifiers={(DOMAIN, "def22")},
+        manufacturer="NextDNS Inc.",
+        name="Profile Two",
+        entry_type=dr.DeviceEntryType.SERVICE,
+        disabled_by=dr.DeviceEntryDisabler.CONFIG_ENTRY,
+    )
+
+    entity_registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "def22_dns_queries",
+        config_entry=entry2,
+        device_id=device2.id,
+        disabled_by=er.RegistryEntryDisabler.CONFIG_ENTRY,
+    )
+
+    await hass.config_entries.async_setup(entry1.entry_id)
+    await hass.async_block_till_done()
+
+    # Verify entry1 was migrated and entry2 was removed
+    assert entry1.version == 2
+    assert entry1.state is ConfigEntryState.LOADED
+    assert hass.config_entries.async_get_entry(entry2.entry_id) is None
+
+    # Find the subentry for the disabled profile
+    subentry2 = next(
+        s for s in entry1.subentries.values() if s.data[CONF_PROFILE_ID] == "def22"
+    )
+
+    # Verify device disabled_by was changed from CONFIG_ENTRY to USER
+    device = device_registry.async_get_device(
+        identifiers={(DOMAIN, f"{entry1.entry_id}_{subentry2.subentry_id}")}
+    )
+    assert device is not None
+    assert device.disabled_by is dr.DeviceEntryDisabler.USER
+
+    # Verify entity disabled_by was changed from CONFIG_ENTRY to DEVICE
+    entity_entry = entity_registry.async_get("sensor.nextdns_def22_dns_queries")
+    assert entity_entry is not None
+    assert entity_entry.config_entry_id == entry1.entry_id
+    assert entity_entry.config_subentry_id == subentry2.subentry_id
+    assert entity_entry.disabled_by is er.RegistryEntryDisabler.DEVICE
