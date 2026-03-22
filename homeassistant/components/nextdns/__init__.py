@@ -97,16 +97,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_migrate_integration(hass: HomeAssistant) -> None:
     """Migrate integration entry structure."""
-    entries = hass.config_entries.async_entries(DOMAIN)
+    # Make sure we get enabled config entries first
+    entries = sorted(
+        hass.config_entries.async_entries(DOMAIN),
+        key=lambda e: e.disabled_by is not None,
+    )
     if not any(entry.version == 1 for entry in entries):
         return
 
-    api_keys_entries: dict[str, NextDnsConfigEntry] = {}
+    api_keys_entries: dict[str, tuple[NextDnsConfigEntry, bool]] = {}
     device_registry = dr.async_get(hass)
     entity_registry = er.async_get(hass)
 
     for entry in entries:
-        use_existing = False
         profile_id = entry.data[CONF_PROFILE_ID]
         profile_name = entry.title
 
@@ -118,18 +121,55 @@ async def async_migrate_integration(hass: HomeAssistant) -> None:
         )
 
         if entry.data[CONF_API_KEY] not in api_keys_entries:
-            use_existing = True
-            api_keys_entries[entry.data[CONF_API_KEY]] = entry
+            all_disabled = all(
+                e.disabled_by is not None
+                for e in entries
+                if e.data[CONF_API_KEY] == entry.data[CONF_API_KEY]
+            )
+            api_keys_entries[entry.data[CONF_API_KEY]] = (entry, all_disabled)
 
-        parent_entry = api_keys_entries[entry.data[CONF_API_KEY]]
+        parent_entry, all_disabled = api_keys_entries[entry.data[CONF_API_KEY]]
 
         hass.config_entries.async_add_subentry(parent_entry, subentry)
 
-        # Migrate device identifiers and subentry association
+        entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
         device = device_registry.async_get_device(identifiers={(DOMAIN, profile_id)})
+
+        for entity_entry in entities:
+            entity_disabled_by = entity_entry.disabled_by
+            if (
+                entity_disabled_by is er.RegistryEntryDisabler.CONFIG_ENTRY
+                and not all_disabled
+            ):
+                # Device and entity registries don't update the disabled_by flag
+                # when moving a device or entity from one config entry to another,
+                # so we need to do it manually.
+                entity_disabled_by = (
+                    er.RegistryEntryDisabler.DEVICE
+                    if device
+                    else er.RegistryEntryDisabler.USER
+                )
+            entity_registry.async_update_entity(
+                entity_entry.entity_id,
+                config_entry_id=parent_entry.entry_id,
+                config_subentry_id=subentry.subentry_id,
+                disabled_by=entity_disabled_by,
+            )
+
+        # Migrate device identifiers and subentry association
         if device is not None:
+            # Device and entity registries don't update the disabled_by flag when
+            # moving a device or entity from one config entry to another, so we
+            # need to do it manually.
+            device_disabled_by = device.disabled_by
+            if (
+                device.disabled_by is dr.DeviceEntryDisabler.CONFIG_ENTRY
+                and not all_disabled
+            ):
+                device_disabled_by = dr.DeviceEntryDisabler.USER
             device_registry.async_update_device(
                 device.id,
+                disabled_by=device_disabled_by,
                 new_identifiers={
                     (DOMAIN, f"{parent_entry.entry_id}_{subentry.subentry_id}")
                 },
@@ -148,18 +188,7 @@ async def async_migrate_integration(hass: HomeAssistant) -> None:
                     remove_config_subentry_id=None,
                 )
 
-        # Migrate entities to parent entry and subentry
         if parent_entry.entry_id != entry.entry_id:
-            for entity in er.async_entries_for_config_entry(
-                entity_registry, entry.entry_id
-            ):
-                entity_registry.async_update_entity(
-                    entity.entity_id,
-                    config_entry_id=parent_entry.entry_id,
-                    config_subentry_id=subentry.subentry_id,
-                )
-
-        if not use_existing:
             await hass.config_entries.async_remove(entry.entry_id)
         else:
             hass.config_entries.async_update_entry(
