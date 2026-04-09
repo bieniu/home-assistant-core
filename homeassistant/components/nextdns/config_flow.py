@@ -65,7 +65,7 @@ async def async_validate_new_api_key(
     return errors
 
 
-def _is_profile_already_configured(hass: HomeAssistant, profile_id: str) -> bool:
+def is_profile_already_configured(hass: HomeAssistant, profile_id: str) -> bool:
     """Check if the profile is already configured."""
     for entry in hass.config_entries.async_entries(DOMAIN):
         for subentry in entry.subentries.values():
@@ -239,7 +239,7 @@ class ProfileSubentryFlowHandler(ConfigSubentryFlow):
             profile_name = user_input[CONF_PROFILE_NAME]
             profile_id = self.nextdns.get_profile_id(profile_name)
 
-            if _is_profile_already_configured(self.hass, profile_id):
+            if is_profile_already_configured(self.hass, profile_id):
                 errors["base"] = "already_configured"
             else:
                 return self.async_create_entry(
@@ -252,7 +252,7 @@ class ProfileSubentryFlowHandler(ConfigSubentryFlow):
         available_profiles = [
             profile.name
             for profile in self.nextdns.profiles
-            if not _is_profile_already_configured(self.hass, profile.id)
+            if not is_profile_already_configured(self.hass, profile.id)
         ]
 
         if not available_profiles:
