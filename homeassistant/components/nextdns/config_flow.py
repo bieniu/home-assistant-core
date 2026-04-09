@@ -162,9 +162,9 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
         entry = self._get_reauth_entry()
 
         if user_input is not None:
-            profile_id = entry.data[CONF_PROFILE_ID]
-
-            errors = await async_validate_new_api_key(self.hass, user_input, profile_id)
+            errors = await async_validate_new_api_key(
+                self.hass, user_input, entry.data[CONF_PROFILE_ID]
+            )
             if errors.get("base") == "profile_not_available":
                 return self.async_abort(reason="profile_not_available")
 
@@ -188,9 +188,9 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
 
         if user_input is not None:
-            profile_id = entry.data[CONF_PROFILE_ID]
-
-            errors = await async_validate_new_api_key(self.hass, user_input, profile_id)
+            errors = await async_validate_new_api_key(
+                self.hass, user_input, entry.data[CONF_PROFILE_ID]
+            )
             if errors.get("base") == "profile_not_available":
                 return self.async_abort(reason="profile_not_available")
 
