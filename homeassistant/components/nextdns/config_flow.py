@@ -162,18 +162,11 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
         entry = self._get_reauth_entry()
 
         if user_input is not None:
-            # Get the first profile_id from subentries to validate
-            profile_ids = [
-                subentry.data[CONF_PROFILE_ID] for subentry in entry.subentries.values()
-            ]
-            profile_id = profile_ids[0] if profile_ids else None
+            profile_id = entry.data[CONF_PROFILE_ID]
 
-            if profile_id:
-                errors = await async_validate_new_api_key(
-                    self.hass, user_input, profile_id
-                )
-                if errors.get("base") == "profile_not_available":
-                    return self.async_abort(reason="profile_not_available")
+            errors = await async_validate_new_api_key(self.hass, user_input, profile_id)
+            if errors.get("base") == "profile_not_available":
+                return self.async_abort(reason="profile_not_available")
 
             if not errors:
                 return self.async_update_reload_and_abort(
@@ -195,18 +188,11 @@ class NextDnsFlowHandler(ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
 
         if user_input is not None:
-            # Get the first profile_id from subentries to validate
-            profile_ids = [
-                subentry.data[CONF_PROFILE_ID] for subentry in entry.subentries.values()
-            ]
-            profile_id = profile_ids[0] if profile_ids else None
+            profile_id = entry.data[CONF_PROFILE_ID]
 
-            if profile_id:
-                errors = await async_validate_new_api_key(
-                    self.hass, user_input, profile_id
-                )
-                if errors.get("base") == "profile_not_available":
-                    return self.async_abort(reason="profile_not_available")
+            errors = await async_validate_new_api_key(self.hass, user_input, profile_id)
+            if errors.get("base") == "profile_not_available":
+                return self.async_abort(reason="profile_not_available")
 
             if not errors:
                 return self.async_update_reload_and_abort(
