@@ -31,7 +31,7 @@ class NextDnsEntity[CoordinatorDataT: NextDnsData](
             identifiers={
                 (
                     DOMAIN,
-                    f"{coordinator.config_entry.entry_id}_{coordinator.subentry_id}",
+                    f"{coordinator.config_entry.entry_id}_{subentry.subentry_id}",
                 )
             },
             manufacturer="NextDNS Inc.",
