@@ -1,6 +1,7 @@
 """Support for Tractive switches."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+
 import logging
 from typing import Any, Literal
 
@@ -8,17 +9,11 @@ from aiotractive.exceptions import TractiveError
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import Trackables, TractiveClient, TractiveConfigEntry
-from .const import (
-    ATTR_BUZZER,
-    ATTR_LED,
-    ATTR_LIVE_TRACKING,
-    ATTR_POWER_SAVING,
-    TRACKER_SWITCH_STATUS_UPDATED,
-)
+from . import TractiveConfigEntry, TractiveCoordinator
+from .const import ATTR_BUZZER, ATTR_LED, ATTR_LIVE_TRACKING, ATTR_POWER_SAVING
 from .entity import TractiveEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,13 +54,12 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Tractive switches."""
-    client = entry.runtime_data.client
-    trackables = entry.runtime_data.trackables
+    coordinators = entry.runtime_data.coordinators
 
     entities = [
-        TractiveSwitch(client, item, description)
+        TractiveSwitch(coordinator, description)
         for description in SWITCH_TYPES
-        for item in trackables
+        for coordinator in coordinators
     ]
 
     async_add_entities(entities)
@@ -78,33 +72,28 @@ class TractiveSwitch(TractiveEntity, SwitchEntity):
 
     def __init__(
         self,
-        client: TractiveClient,
-        item: Trackables,
+        coordinator: TractiveCoordinator,
         description: TractiveSwitchEntityDescription,
     ) -> None:
         """Initialize switch entity."""
-        super().__init__(
-            client,
-            item.trackable,
-            item.tracker_details,
-            f"{TRACKER_SWITCH_STATUS_UPDATED}-{item.tracker_details['_id']}",
-        )
-
-        self._attr_unique_id = f"{item.trackable['_id']}_{description.key}"
-        self._tracker = item.tracker
-        self._method = getattr(self, description.method)
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.pet_id}_{description.key}"
         self.entity_description = description
+        self._method = getattr(self, description.method)
 
-    @callback
-    def handle_status_update(self, event: dict[str, Any]) -> None:
-        """Handle status update."""
-        if ATTR_POWER_SAVING in event:
-            self._attr_available = not event[ATTR_POWER_SAVING]
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        if not super().available or self.coordinator.data.switches is None:
+            return False
+        return not self.coordinator.data.switches.get(ATTR_POWER_SAVING, False)
 
-        if self.entity_description.key in event:
-            self._attr_is_on = event[self.entity_description.key]
-
-        self.async_write_ha_state()
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if switch is on."""
+        if self.coordinator.data.switches is None:
+            return None
+        return self.coordinator.data.switches.get(self.entity_description.key)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on a switch."""
@@ -115,8 +104,13 @@ class TractiveSwitch(TractiveEntity, SwitchEntity):
             return
         # Write state back to avoid switch flips with a slow response
         if result["pending"]:
-            self._attr_is_on = True
-            self.async_write_ha_state()
+            switches = {
+                **(self.coordinator.data.switches or {}),
+                self.entity_description.key: True,
+            }
+            self.coordinator.async_set_updated_data(
+                replace(self.coordinator.data, switches=switches)
+            )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off a switch."""
@@ -127,17 +121,22 @@ class TractiveSwitch(TractiveEntity, SwitchEntity):
             return
         # Write state back to avoid switch flips with a slow response
         if result["pending"]:
-            self._attr_is_on = False
-            self.async_write_ha_state()
+            switches = {
+                **(self.coordinator.data.switches or {}),
+                self.entity_description.key: False,
+            }
+            self.coordinator.async_set_updated_data(
+                replace(self.coordinator.data, switches=switches)
+            )
 
     async def async_set_buzzer(self, active: bool) -> dict[str, Any]:
         """Set the buzzer on/off."""
-        return await self._tracker.set_buzzer_active(active)
+        return await self.coordinator.tracker.set_buzzer_active(active)
 
     async def async_set_led(self, active: bool) -> dict[str, Any]:
         """Set the LED on/off."""
-        return await self._tracker.set_led_active(active)
+        return await self.coordinator.tracker.set_led_active(active)
 
     async def async_set_live_tracking(self, active: bool) -> dict[str, Any]:
         """Set the live tracking on/off."""
-        return await self._tracker.set_live_tracking_active(active)
+        return await self.coordinator.tracker.set_live_tracking_active(active)
