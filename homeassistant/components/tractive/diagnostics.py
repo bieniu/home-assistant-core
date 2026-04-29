@@ -15,12 +15,12 @@ async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, config_entry: TractiveConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
-    trackables = config_entry.runtime_data.trackables
+    coordinators = config_entry.runtime_data.coordinators
 
     return async_redact_data(
         {
             "config_entry": config_entry.as_dict(),
-            "trackables": [item.trackable for item in trackables],
+            "trackables": [coordinator.trackable for coordinator in coordinators],
         },
         TO_REDACT,
     )
