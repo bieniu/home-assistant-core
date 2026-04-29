@@ -161,7 +161,7 @@ async def test_server_unavailable(
     assert hass.states.get(entity_id).state != STATE_UNAVAILABLE
 
     # send server unavailable event, the entity should be unavailable
-    mock_tractive_client.send_server_unavailable_event(hass)
+    mock_tractive_client.send_server_unavailable_event(mock_config_entry)
     await hass.async_block_till_done()
 
     assert hass.states.get(entity_id).state == STATE_UNAVAILABLE
@@ -185,16 +185,15 @@ async def test_missing_sleep_data(
 
     await init_integration(hass, mock_config_entry)
 
-    with patch(
-        "homeassistant.components.tractive.async_dispatcher_send"
-    ) as async_dispatcher_send_mock:
-        mock_tractive_client.send_health_overview_event(mock_config_entry, event)
+    mock_tractive_client.send_health_overview_event(mock_config_entry, event)
+    await hass.async_block_till_done()
 
-    assert async_dispatcher_send_mock.call_count == 1
-    payload = async_dispatcher_send_mock.mock_calls[0][1][2]
-    assert payload[ATTR_MINUTES_DAY_SLEEP] is None
-    assert payload[ATTR_MINUTES_NIGHT_SLEEP] is None
-    assert payload[ATTR_MINUTES_REST] is None
+    coordinator = mock_config_entry.runtime_data.coordinators[0]
+    health = coordinator.data.health_overview
+    assert health is not None
+    assert health[ATTR_MINUTES_DAY_SLEEP] is None
+    assert health[ATTR_MINUTES_NIGHT_SLEEP] is None
+    assert health[ATTR_MINUTES_REST] is None
 
 
 @pytest.mark.parametrize(("activity_data"), [None, {}, {"unexpected": 123}])
@@ -209,15 +208,14 @@ async def test_missing_activity_data(
 
     await init_integration(hass, mock_config_entry)
 
-    with patch(
-        "homeassistant.components.tractive.async_dispatcher_send"
-    ) as async_dispatcher_send_mock:
-        mock_tractive_client.send_health_overview_event(mock_config_entry, event)
+    mock_tractive_client.send_health_overview_event(mock_config_entry, event)
+    await hass.async_block_till_done()
 
-    assert async_dispatcher_send_mock.call_count == 1
-    payload = async_dispatcher_send_mock.mock_calls[0][1][2]
-    assert payload[ATTR_DAILY_GOAL] is None
-    assert payload[ATTR_MINUTES_ACTIVE] is None
+    coordinator = mock_config_entry.runtime_data.coordinators[0]
+    health = coordinator.data.health_overview
+    assert health is not None
+    assert health[ATTR_DAILY_GOAL] is None
+    assert health[ATTR_MINUTES_ACTIVE] is None
 
 
 @pytest.mark.parametrize("sensor", ["activity_label", "calories", "sleep_label"])

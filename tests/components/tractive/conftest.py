@@ -4,14 +4,13 @@ from collections.abc import Generator
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
+import aiotractive
 from aiotractive.trackable_object import TrackableObject
 from aiotractive.tracker import Tracker
 import pytest
 
-from homeassistant.components.tractive.const import DOMAIN, SERVER_UNAVAILABLE
+from homeassistant.components.tractive.const import DOMAIN
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from tests.common import MockConfigEntry, load_json_object_fixture
 
@@ -76,9 +75,11 @@ def mock_tractive_client() -> Generator[AsyncMock]:
             }
         entry.runtime_data.client._send_switch_update(event)
 
-    def send_server_unavailable_event(hass: HomeAssistant) -> None:
+    def send_server_unavailable_event(entry: MockConfigEntry) -> None:
         """Send server unavailable event."""
-        async_dispatcher_send(hass, f"{SERVER_UNAVAILABLE}-12345")
+        error = aiotractive.exceptions.TractiveError("Server unavailable")
+        for coordinator in entry.runtime_data.coordinators:
+            coordinator.async_set_update_error(error)
 
     trackable_object = load_json_object_fixture("trackable_object.json", DOMAIN)
     tracker_details = load_json_object_fixture("tracker_details.json", DOMAIN)
