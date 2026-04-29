@@ -1,5 +1,7 @@
 """Support for Tractive device trackers."""
 
+from typing import cast
+
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.const import ATTR_BATTERY_LEVEL
 from homeassistant.core import HomeAssistant
@@ -59,18 +61,18 @@ class TractiveDeviceTracker(TractiveEntity, TrackerEntity):
         """Return latitude value of the device."""
         if self.coordinator.data.position is None:
             return None
-        return self.coordinator.data.position["latitude"]
+        return cast(float, self.coordinator.data.position["latitude"])
 
     @property
     def longitude(self) -> float | None:
         """Return longitude value of the device."""
         if self.coordinator.data.position is None:
             return None
-        return self.coordinator.data.position["longitude"]
+        return cast(float, self.coordinator.data.position["longitude"])
 
     @property
     def location_accuracy(self) -> int:
         """Return the gps accuracy of the device."""
         if self.coordinator.data.position is None:
             return 0
-        return self.coordinator.data.position["accuracy"]
+        return cast(int, self.coordinator.data.position["accuracy"])
