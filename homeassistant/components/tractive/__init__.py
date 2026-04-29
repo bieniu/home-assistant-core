@@ -1,7 +1,7 @@
 """The tractive integration."""
 
 import asyncio
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -54,6 +54,18 @@ class TractiveData:
 
     client: TractiveClient
     coordinators: list[TractiveDataUpdateCoordinator]
+    coordinators_by_tracker: dict[str, TractiveDataUpdateCoordinator] = field(
+        default_factory=dict
+    )
+    coordinators_by_pet: dict[str, TractiveDataUpdateCoordinator] = field(
+        default_factory=dict
+    )
+
+    def __post_init__(self) -> None:
+        """Build coordinator lookup dicts."""
+        for coordinator in self.coordinators:
+            self.coordinators_by_tracker[coordinator.tracker_id] = coordinator
+            self.coordinators_by_pet[coordinator.pet_id] = coordinator
 
 
 type TractiveConfigEntry = ConfigEntry[TractiveData]
@@ -105,7 +117,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: TractiveConfigEntry) -> 
         TractiveDataUpdateCoordinator(hass, tractive, item, entry)
         for item in filtered_trackables
     ]
-    tractive.set_coordinators(coordinators)
 
     entry.runtime_data = TractiveData(tractive, coordinators)
 
@@ -181,7 +192,7 @@ class TractiveClient:
         hass: HomeAssistant,
         client: aiotractive.Tractive,
         user_id: str,
-        config_entry: ConfigEntry,
+        config_entry: TractiveConfigEntry,
     ) -> None:
         """Initialize the client."""
         self._hass = hass
@@ -191,16 +202,6 @@ class TractiveClient:
         self._last_pos_time = 0
         self._listen_task: asyncio.Task | None = None
         self._config_entry = config_entry
-        self._coordinators_by_tracker: dict[str, TractiveDataUpdateCoordinator] = {}
-        self._coordinators_by_pet: dict[str, TractiveDataUpdateCoordinator] = {}
-
-    def set_coordinators(
-        self, coordinators: list[TractiveDataUpdateCoordinator]
-    ) -> None:
-        """Register coordinators for event routing."""
-        for coordinator in coordinators:
-            self._coordinators_by_tracker[coordinator.tracker_id] = coordinator
-            self._coordinators_by_pet[coordinator.pet_id] = coordinator
 
     @property
     def user_id(self) -> str:
@@ -278,7 +279,9 @@ class TractiveClient:
                 server_error = aiotractive.exceptions.TractiveError(
                     "Server unavailable"
                 )
-                for coordinator in self._coordinators_by_tracker.values():
+                for (
+                    coordinator
+                ) in self._config_entry.runtime_data.coordinators_by_tracker.values():
                     coordinator.async_set_update_error(server_error)
                 await asyncio.sleep(RECONNECT_INTERVAL.total_seconds())
                 server_was_unavailable = True
@@ -292,7 +295,9 @@ class TractiveClient:
             ATTR_POWER_SAVING: event.get("tracker_state_reason") == "POWER_SAVING",
             ATTR_BATTERY_CHARGING: event["charging_state"] == "CHARGING",
         }
-        if coordinator := self._coordinators_by_tracker.get(event["tracker_id"]):
+        if coordinator := self._config_entry.runtime_data.coordinators_by_tracker.get(
+            event["tracker_id"]
+        ):
             coordinator.async_set_updated_data(
                 replace(coordinator.data, hardware=hardware)
             )
@@ -308,7 +313,12 @@ class TractiveClient:
                 hardware.get("power_saving_zone_id") is not None
             )
         if payload:
-            if coordinator := self._coordinators_by_tracker.get(event["tracker_id"]):
+            if (
+                coordinator
+                := self._config_entry.runtime_data.coordinators_by_tracker.get(
+                    event["tracker_id"]
+                )
+            ):
                 existing = coordinator.data.switches or {}
                 coordinator.async_set_updated_data(
                     replace(coordinator.data, switches={**existing, **payload})
@@ -330,7 +340,9 @@ class TractiveClient:
             ATTR_MINUTES_NIGHT_SLEEP: sleep.get("minutesNightSleep"),
             ATTR_MINUTES_REST: sleep.get("minutesCalm"),
         }
-        if coordinator := self._coordinators_by_pet.get(data["petId"]):
+        if coordinator := self._config_entry.runtime_data.coordinators_by_pet.get(
+            data["petId"]
+        ):
             coordinator.async_set_updated_data(
                 replace(coordinator.data, health_overview=health_overview)
             )
@@ -342,7 +354,9 @@ class TractiveClient:
             "accuracy": event["position"]["accuracy"],
             "sensor_used": event["position"]["sensor_used"],
         }
-        if coordinator := self._coordinators_by_tracker.get(event["tracker_id"]):
+        if coordinator := self._config_entry.runtime_data.coordinators_by_tracker.get(
+            event["tracker_id"]
+        ):
             coordinator.async_set_updated_data(
                 replace(coordinator.data, position=position)
             )
