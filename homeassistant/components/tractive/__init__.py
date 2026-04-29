@@ -1,7 +1,7 @@
 """The tractive integration."""
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -21,7 +21,7 @@ from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
     ATTR_DAILY_GOAL,
@@ -34,12 +34,7 @@ from .const import (
     CLIENT_ID,
     DOMAIN,
     RECONNECT_INTERVAL,
-    SERVER_UNAVAILABLE,
     SWITCH_KEY_MAP,
-    TRACKER_HARDWARE_STATUS_UPDATED,
-    TRACKER_HEALTH_OVERVIEW_UPDATED,
-    TRACKER_POSITION_UPDATED,
-    TRACKER_SWITCH_STATUS_UPDATED,
 )
 
 PLATFORMS = [
@@ -51,6 +46,16 @@ PLATFORMS = [
 
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass
+class TractiveTrackerData:
+    """Current data for a Tractive tracker."""
+
+    hardware: dict[str, Any] | None = None
+    position: dict[str, Any] | None = None
+    switches: dict[str, Any] | None = None
+    health_overview: dict[str, Any] | None = None
 
 
 @dataclass
@@ -70,10 +75,70 @@ class TractiveData:
     """Class for Tractive data."""
 
     client: TractiveClient
-    trackables: list[Trackables]
+    coordinators: list[TractiveCoordinator]
 
 
 type TractiveConfigEntry = ConfigEntry[TractiveData]
+
+
+class TractiveCoordinator(DataUpdateCoordinator[TractiveTrackerData]):
+    """Coordinator for a single Tractive tracker."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: TractiveClient,
+        item: Trackables,
+        entry: TractiveConfigEntry,
+    ) -> None:
+        """Initialize the coordinator."""
+        super().__init__(
+            hass,
+            _LOGGER,
+            config_entry=entry,
+            name=f"Tractive {item.tracker_details['_id']}",
+        )
+        self.client = client
+        self.trackable = item.trackable
+        self.tracker_details = item.tracker_details
+        self.tracker = item.tracker
+        self.pet_id: str = item.trackable["_id"]
+        self.tracker_id: str = item.tracker_details["_id"]
+        self.data = _build_initial_coordinator_data(item)
+
+
+def _build_initial_coordinator_data(item: Trackables) -> TractiveTrackerData:
+    """Build initial coordinator data from a Trackables instance."""
+    pos = item.pos_report
+    position: dict[str, Any] | None = None
+    if pos:
+        position = {
+            "latitude": pos["latlong"][0],
+            "longitude": pos["latlong"][1],
+            "accuracy": pos["pos_uncertainty"],
+            "sensor_used": pos["sensor_used"],
+        }
+
+    health_overview: dict[str, Any] | None = None
+    ho = item.health_overview
+    if ho:
+        data = ho.get("content", ho)
+        activity = data.get("activity") or {}
+        sleep = data.get("sleep") or {}
+        health_overview = {
+            ATTR_DAILY_GOAL: activity.get("minutesGoal"),
+            ATTR_MINUTES_ACTIVE: activity.get("minutesActive"),
+            ATTR_MINUTES_DAY_SLEEP: sleep.get("minutesDaySleep"),
+            ATTR_MINUTES_NIGHT_SLEEP: sleep.get("minutesNightSleep"),
+            ATTR_MINUTES_REST: sleep.get("minutesCalm"),
+        }
+
+    return TractiveTrackerData(
+        hardware=None,
+        position=position,
+        switches=None,
+        health_overview=health_overview,
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: TractiveConfigEntry) -> bool:
@@ -118,14 +183,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: TractiveConfigEntry) -> 
     # So we have to remove None values from trackables list.
     filtered_trackables = [item for item in trackables if item]
 
-    entry.runtime_data = TractiveData(tractive, filtered_trackables)
+    coordinators = [
+        TractiveCoordinator(hass, tractive, item, entry) for item in filtered_trackables
+    ]
+    tractive.set_coordinators(coordinators)
+
+    entry.runtime_data = TractiveData(tractive, coordinators)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    # Send initial health overview data to sensors after platforms are set up
-    for item in filtered_trackables:
-        if item.health_overview:
-            tractive.send_health_overview_update(item.health_overview)
 
     async def cancel_listen_task(_: Event) -> None:
         await tractive.unsubscribe()
@@ -207,6 +272,14 @@ class TractiveClient:
         self._last_pos_time = 0
         self._listen_task: asyncio.Task | None = None
         self._config_entry = config_entry
+        self._coordinators_by_tracker: dict[str, TractiveCoordinator] = {}
+        self._coordinators_by_pet: dict[str, TractiveCoordinator] = {}
+
+    def set_coordinators(self, coordinators: list[TractiveCoordinator]) -> None:
+        """Register coordinators for event routing."""
+        for coord in coordinators:
+            self._coordinators_by_tracker[coord.tracker_id] = coord
+            self._coordinators_by_pet[coord.pet_id] = coord
 
     @property
     def user_id(self) -> str:
@@ -281,28 +354,31 @@ class TractiveClient:
                 )
                 self._last_hw_time = 0
                 self._last_pos_time = 0
-                async_dispatcher_send(
-                    self._hass, f"{SERVER_UNAVAILABLE}-{self._user_id}"
+                server_error = aiotractive.exceptions.TractiveError(
+                    "Server unavailable"
                 )
+                for coordinator in self._coordinators_by_tracker.values():
+                    coordinator.async_set_update_error(server_error)
                 await asyncio.sleep(RECONNECT_INTERVAL.total_seconds())
                 server_was_unavailable = True
                 continue
 
     def _send_hardware_update(self, event: dict[str, Any]) -> None:
         # Sometimes hardware event doesn't contain complete data.
-        payload = {
+        hardware = {
             ATTR_BATTERY_LEVEL: event["hardware"]["battery_level"],
             ATTR_TRACKER_STATE: event["tracker_state"].lower(),
             ATTR_POWER_SAVING: event.get("tracker_state_reason") == "POWER_SAVING",
             ATTR_BATTERY_CHARGING: event["charging_state"] == "CHARGING",
         }
-        self._dispatch_tracker_event(
-            TRACKER_HARDWARE_STATUS_UPDATED, event["tracker_id"], payload
-        )
+        if coordinator := self._coordinators_by_tracker.get(event["tracker_id"]):
+            coordinator.async_set_updated_data(
+                replace(coordinator.data, hardware=hardware)
+            )
 
     def _send_switch_update(self, event: dict[str, Any]) -> None:
         # Sometimes the event contains data for all switches, sometimes only for one.
-        payload = {}
+        payload: dict[str, Any] = {}
         for switch, key in SWITCH_KEY_MAP.items():
             if switch_data := event.get(key):
                 payload[switch] = switch_data["active"]
@@ -310,9 +386,12 @@ class TractiveClient:
             payload[ATTR_POWER_SAVING] = (
                 hardware.get("power_saving_zone_id") is not None
             )
-        self._dispatch_tracker_event(
-            TRACKER_SWITCH_STATUS_UPDATED, event["tracker_id"], payload
-        )
+        if payload:
+            if coordinator := self._coordinators_by_tracker.get(event["tracker_id"]):
+                existing = coordinator.data.switches or {}
+                coordinator.async_set_updated_data(
+                    replace(coordinator.data, switches={**existing, **payload})
+                )
 
     def send_health_overview_update(self, event: dict[str, Any]) -> None:
         """Handle health_overview events from Tractive API."""
@@ -323,34 +402,26 @@ class TractiveClient:
         activity = data.get("activity") or {}
         sleep = data.get("sleep") or {}
 
-        payload = {
+        health_overview = {
             ATTR_DAILY_GOAL: activity.get("minutesGoal"),
             ATTR_MINUTES_ACTIVE: activity.get("minutesActive"),
             ATTR_MINUTES_DAY_SLEEP: sleep.get("minutesDaySleep"),
             ATTR_MINUTES_NIGHT_SLEEP: sleep.get("minutesNightSleep"),
-            # Calm minutes can be used as rest indicator
             ATTR_MINUTES_REST: sleep.get("minutesCalm"),
         }
-        self._dispatch_tracker_event(
-            TRACKER_HEALTH_OVERVIEW_UPDATED, data["petId"], payload
-        )
+        if coordinator := self._coordinators_by_pet.get(data["petId"]):
+            coordinator.async_set_updated_data(
+                replace(coordinator.data, health_overview=health_overview)
+            )
 
     def _send_position_update(self, event: dict[str, Any]) -> None:
-        payload = {
+        position = {
             "latitude": event["position"]["latlong"][0],
             "longitude": event["position"]["latlong"][1],
             "accuracy": event["position"]["accuracy"],
             "sensor_used": event["position"]["sensor_used"],
         }
-        self._dispatch_tracker_event(
-            TRACKER_POSITION_UPDATED, event["tracker_id"], payload
-        )
-
-    def _dispatch_tracker_event(
-        self, event_name: str, tracker_id: str, payload: dict[str, Any]
-    ) -> None:
-        async_dispatcher_send(
-            self._hass,
-            f"{event_name}-{tracker_id}",
-            payload,
-        )
+        if coordinator := self._coordinators_by_tracker.get(event["tracker_id"]):
+            coordinator.async_set_updated_data(
+                replace(coordinator.data, position=position)
+            )
