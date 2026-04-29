@@ -2,7 +2,6 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -10,41 +9,40 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntityDescription,
 )
 from homeassistant.const import ATTR_BATTERY_CHARGING, EntityCategory
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import Trackables, TractiveClient, TractiveConfigEntry
-from .const import ATTR_POWER_SAVING, TRACKER_HARDWARE_STATUS_UPDATED
+from . import TractiveConfigEntry, TractiveCoordinator
+from .const import ATTR_POWER_SAVING
 from .entity import TractiveEntity
 
 
 class TractiveBinarySensor(TractiveEntity, BinarySensorEntity):
     """Tractive sensor."""
 
+    entity_description: TractiveBinarySensorEntityDescription
+
     def __init__(
         self,
-        client: TractiveClient,
-        item: Trackables,
+        coordinator: TractiveCoordinator,
         description: TractiveBinarySensorEntityDescription,
     ) -> None:
         """Initialize sensor entity."""
-        super().__init__(
-            client,
-            item.trackable,
-            item.tracker_details,
-            f"{TRACKER_HARDWARE_STATUS_UPDATED}-{item.tracker_details['_id']}",
-        )
-
-        self._attr_unique_id = f"{item.trackable['_id']}_{description.key}"
-        self._attr_available = False
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.pet_id}_{description.key}"
         self.entity_description = description
 
-    @callback
-    def handle_status_update(self, event: dict[str, Any]) -> None:
-        """Handle status update."""
-        self._attr_is_on = event[self.entity_description.key]
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return super().available and self.coordinator.data.hardware is not None
 
-        super().handle_status_update(event)
+    @property
+    def is_on(self) -> bool | None:
+        """Return the state of the binary sensor."""
+        if self.coordinator.data.hardware is None:
+            return None
+        return self.coordinator.data.hardware.get(self.entity_description.key)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -76,14 +74,13 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Tractive device trackers."""
-    client = entry.runtime_data.client
-    trackables = entry.runtime_data.trackables
+    coordinators = entry.runtime_data.coordinators
 
     entities = [
-        TractiveBinarySensor(client, item, description)
+        TractiveBinarySensor(coordinator, description)
         for description in SENSOR_TYPES
-        for item in trackables
-        if description.supported(item.tracker_details)
+        for coordinator in coordinators
+        if description.supported(coordinator.tracker_details)
     ]
 
     async_add_entities(entities)
