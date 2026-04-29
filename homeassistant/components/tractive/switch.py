@@ -12,8 +12,9 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import TractiveConfigEntry, TractiveCoordinator
+from . import TractiveConfigEntry
 from .const import ATTR_BUZZER, ATTR_LED, ATTR_LIVE_TRACKING, ATTR_POWER_SAVING
+from .coordinator import TractiveDataUpdateCoordinator
 from .entity import TractiveEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ class TractiveSwitch(TractiveEntity, SwitchEntity):
 
     def __init__(
         self,
-        coordinator: TractiveCoordinator,
+        coordinator: TractiveDataUpdateCoordinator,
         description: TractiveSwitchEntityDescription,
     ) -> None:
         """Initialize switch entity."""

@@ -12,8 +12,9 @@ from homeassistant.const import ATTR_BATTERY_CHARGING, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import TractiveConfigEntry, TractiveCoordinator
+from . import TractiveConfigEntry
 from .const import ATTR_POWER_SAVING
+from .coordinator import TractiveDataUpdateCoordinator
 from .entity import TractiveEntity
 
 
@@ -24,7 +25,7 @@ class TractiveBinarySensor(TractiveEntity, BinarySensorEntity):
 
     def __init__(
         self,
-        coordinator: TractiveCoordinator,
+        coordinator: TractiveDataUpdateCoordinator,
         description: TractiveBinarySensorEntityDescription,
     ) -> None:
         """Initialize sensor entity."""

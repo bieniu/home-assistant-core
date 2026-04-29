@@ -7,7 +7,8 @@ from homeassistant.const import ATTR_BATTERY_LEVEL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from . import TractiveConfigEntry, TractiveCoordinator
+from . import TractiveConfigEntry
+from .coordinator import TractiveDataUpdateCoordinator
 from .entity import TractiveEntity
 
 
@@ -29,7 +30,7 @@ class TractiveDeviceTracker(TractiveEntity, TrackerEntity):
 
     _attr_translation_key = "tracker"
 
-    def __init__(self, coordinator: TractiveCoordinator) -> None:
+    def __init__(self, coordinator: TractiveDataUpdateCoordinator) -> None:
         """Initialize tracker entity."""
         super().__init__(coordinator)
         self._attr_unique_id = coordinator.pet_id

@@ -3,16 +3,16 @@
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import TractiveCoordinator
 from .const import DOMAIN
+from .coordinator import TractiveDataUpdateCoordinator
 
 
-class TractiveEntity(CoordinatorEntity[TractiveCoordinator]):
+class TractiveEntity(CoordinatorEntity[TractiveDataUpdateCoordinator]):
     """Tractive entity class."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: TractiveCoordinator) -> None:
+    def __init__(self, coordinator: TractiveDataUpdateCoordinator) -> None:
         """Initialize tracker entity."""
         super().__init__(coordinator)
         self._attr_device_info = DeviceInfo(

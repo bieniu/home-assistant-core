@@ -19,7 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
-from . import TractiveConfigEntry, TractiveCoordinator
+from . import TractiveConfigEntry
 from .const import (
     ATTR_DAILY_GOAL,
     ATTR_MINUTES_ACTIVE,
@@ -28,6 +28,7 @@ from .const import (
     ATTR_MINUTES_REST,
     ATTR_TRACKER_STATE,
 )
+from .coordinator import TractiveDataUpdateCoordinator
 from .entity import TractiveEntity
 
 
@@ -46,7 +47,7 @@ class TractiveSensor(TractiveEntity, SensorEntity):
 
     def __init__(
         self,
-        coordinator: TractiveCoordinator,
+        coordinator: TractiveDataUpdateCoordinator,
         description: TractiveSensorEntityDescription,
     ) -> None:
         """Initialize sensor entity."""
