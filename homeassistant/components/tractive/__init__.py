@@ -198,9 +198,9 @@ class TractiveClient:
         self, coordinators: list[TractiveDataUpdateCoordinator]
     ) -> None:
         """Register coordinators for event routing."""
-        for coord in coordinators:
-            self._coordinators_by_tracker[coord.tracker_id] = coord
-            self._coordinators_by_pet[coord.pet_id] = coord
+        for coordinator in coordinators:
+            self._coordinators_by_tracker[coordinator.tracker_id] = coordinator
+            self._coordinators_by_pet[coordinator.pet_id] = coordinator
 
     @property
     def user_id(self) -> str:
