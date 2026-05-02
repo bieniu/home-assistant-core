@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -43,7 +44,7 @@ class TractiveBinarySensor(TractiveEntity, BinarySensorEntity):
         """Return the state of the binary sensor."""
         if self.coordinator.data.hardware is None:
             return None
-        return self.coordinator.data.hardware.get(self.entity_description.key)
+        return self.entity_description.value_fn(self.coordinator.data.hardware)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -51,6 +52,7 @@ class TractiveBinarySensorEntityDescription(BinarySensorEntityDescription):
     """Class describing Tractive binary sensor entities."""
 
     supported: Callable[[dict], bool] = lambda _: True
+    value_fn: Callable[[dict[str, Any]], bool | None] = lambda _: None
 
 
 SENSOR_TYPES = [
@@ -60,11 +62,13 @@ SENSOR_TYPES = [
         device_class=BinarySensorDeviceClass.BATTERY_CHARGING,
         entity_category=EntityCategory.DIAGNOSTIC,
         supported=lambda details: details.get("charging_state") is not None,
+        value_fn=lambda event: event.get("charging_state") == "CHARGING",
     ),
     TractiveBinarySensorEntityDescription(
         key=ATTR_POWER_SAVING,
         translation_key="tracker_power_saving",
         entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda event: event.get("tracker_state_reason") == "POWER_SAVING",
     ),
 ]
 

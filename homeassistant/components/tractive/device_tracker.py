@@ -3,7 +3,6 @@
 from typing import cast
 
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
-from homeassistant.const import ATTR_BATTERY_LEVEL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -45,7 +44,7 @@ class TractiveDeviceTracker(TractiveEntity, TrackerEntity):
         """Return the battery level of the device."""
         if self.coordinator.data.hardware is None:
             return None
-        return self.coordinator.data.hardware.get(ATTR_BATTERY_LEVEL)
+        return self.coordinator.data.hardware["hardware"].get("battery_level")
 
     @property
     def source_type(self) -> SourceType:

@@ -71,9 +71,7 @@ class TractiveSensor(TractiveEntity, SensorEntity):
         if self.entity_description.hardware_sensor:
             if self.coordinator.data.hardware is None:
                 return None
-            return self.entity_description.value_fn(
-                self.coordinator.data.hardware.get(self.entity_description.key)
-            )
+            return self.entity_description.value_fn(self.coordinator.data.hardware)
         if self.coordinator.data.health_overview is None:
             return None
         return self.entity_description.value_fn(self.coordinator.data.health_overview)
@@ -87,6 +85,7 @@ SENSOR_TYPES: tuple[TractiveSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.BATTERY,
         hardware_sensor=True,
         entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda event: event["hardware"]["battery_level"],
     ),
     TractiveSensorEntityDescription(
         key=ATTR_TRACKER_STATE,
@@ -101,6 +100,7 @@ SENSOR_TYPES: tuple[TractiveSensorEntityDescription, ...] = (
             "system_shutdown_user",
             "system_startup",
         ],
+        value_fn=lambda event: event["tracker_state"].lower(),
     ),
     TractiveSensorEntityDescription(
         key=ATTR_MINUTES_ACTIVE,

@@ -10,8 +10,6 @@ import aiotractive
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    ATTR_BATTERY_CHARGING,
-    ATTR_BATTERY_LEVEL,
     CONF_EMAIL,
     CONF_PASSWORD,
     EVENT_HOMEASSISTANT_STOP,
@@ -24,7 +22,6 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     ATTR_POWER_SAVING,
-    ATTR_TRACKER_STATE,
     CLIENT_ID,
     DOMAIN,
     RECONNECT_INTERVAL,
@@ -283,18 +280,11 @@ class TractiveClient:
                 continue
 
     def _send_hardware_update(self, event: dict[str, Any]) -> None:
-        # Sometimes hardware event doesn't contain complete data.
-        hardware = {
-            ATTR_BATTERY_LEVEL: event["hardware"]["battery_level"],
-            ATTR_TRACKER_STATE: event["tracker_state"].lower(),
-            ATTR_POWER_SAVING: event.get("tracker_state_reason") == "POWER_SAVING",
-            ATTR_BATTERY_CHARGING: event["charging_state"] == "CHARGING",
-        }
         if coordinator := self._config_entry.runtime_data.coordinators_by_tracker.get(
             event["tracker_id"]
         ):
             coordinator.async_set_updated_data(
-                replace(coordinator.data, hardware=hardware)
+                replace(coordinator.data, hardware=event)
             )
 
     def _send_switch_update(self, event: dict[str, Any]) -> None:
