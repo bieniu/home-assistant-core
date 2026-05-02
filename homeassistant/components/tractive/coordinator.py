@@ -4,23 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import aiotractive
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import (
-    ATTR_DAILY_GOAL,
-    ATTR_MINUTES_ACTIVE,
-    ATTR_MINUTES_DAY_SLEEP,
-    ATTR_MINUTES_NIGHT_SLEEP,
-    ATTR_MINUTES_REST,
-)
-
-if TYPE_CHECKING:
-    from . import TractiveClient, TractiveConfigEntry
+from . import TractiveClient, TractiveConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,16 +79,7 @@ def _build_initial_coordinator_data(item: Trackables) -> TractiveTrackerData:
     health_overview: dict[str, Any] | None = None
     ho = item.health_overview
     if ho:
-        data = ho.get("content", ho)
-        activity = data.get("activity") or {}
-        sleep = data.get("sleep") or {}
-        health_overview = {
-            ATTR_DAILY_GOAL: activity.get("minutesGoal"),
-            ATTR_MINUTES_ACTIVE: activity.get("minutesActive"),
-            ATTR_MINUTES_DAY_SLEEP: sleep.get("minutesDaySleep"),
-            ATTR_MINUTES_NIGHT_SLEEP: sleep.get("minutesNightSleep"),
-            ATTR_MINUTES_REST: sleep.get("minutesCalm"),
-        }
+        health_overview = ho.get("content", ho)
 
     return TractiveTrackerData(
         hardware=None,

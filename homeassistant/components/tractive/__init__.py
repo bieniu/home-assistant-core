@@ -23,11 +23,6 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
-    ATTR_DAILY_GOAL,
-    ATTR_MINUTES_ACTIVE,
-    ATTR_MINUTES_DAY_SLEEP,
-    ATTR_MINUTES_NIGHT_SLEEP,
-    ATTR_MINUTES_REST,
     ATTR_POWER_SAVING,
     ATTR_TRACKER_STATE,
     CLIENT_ID,
@@ -330,21 +325,11 @@ class TractiveClient:
         # Handle both structures for compatibility
         data = event.get("content", event)
 
-        activity = data.get("activity") or {}
-        sleep = data.get("sleep") or {}
-
-        health_overview = {
-            ATTR_DAILY_GOAL: activity.get("minutesGoal"),
-            ATTR_MINUTES_ACTIVE: activity.get("minutesActive"),
-            ATTR_MINUTES_DAY_SLEEP: sleep.get("minutesDaySleep"),
-            ATTR_MINUTES_NIGHT_SLEEP: sleep.get("minutesNightSleep"),
-            ATTR_MINUTES_REST: sleep.get("minutesCalm"),
-        }
         if coordinator := self._config_entry.runtime_data.coordinators_by_pet.get(
             data["petId"]
         ):
             coordinator.async_set_updated_data(
-                replace(coordinator.data, health_overview=health_overview)
+                replace(coordinator.data, health_overview=data)
             )
 
     def _send_position_update(self, event: dict[str, Any]) -> None:

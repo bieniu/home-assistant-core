@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -37,7 +38,7 @@ class TractiveSensorEntityDescription(SensorEntityDescription):
     """Class describing Tractive sensor entities."""
 
     hardware_sensor: bool = False
-    value_fn: Callable[[StateType], StateType] = lambda state: state
+    value_fn: Callable[[Any], StateType] = lambda state: state
 
 
 class TractiveSensor(TractiveEntity, SensorEntity):
@@ -75,9 +76,7 @@ class TractiveSensor(TractiveEntity, SensorEntity):
             )
         if self.coordinator.data.health_overview is None:
             return None
-        return self.entity_description.value_fn(
-            self.coordinator.data.health_overview.get(self.entity_description.key)
-        )
+        return self.entity_description.value_fn(self.coordinator.data.health_overview)
 
 
 SENSOR_TYPES: tuple[TractiveSensorEntityDescription, ...] = (
@@ -108,29 +107,34 @@ SENSOR_TYPES: tuple[TractiveSensorEntityDescription, ...] = (
         translation_key="activity_time",
         native_unit_of_measurement=UnitOfTime.MINUTES,
         state_class=SensorStateClass.TOTAL,
+        value_fn=lambda data: (data.get("activity") or {}).get("minutesActive"),
     ),
     TractiveSensorEntityDescription(
         key=ATTR_MINUTES_REST,
         translation_key="rest_time",
         native_unit_of_measurement=UnitOfTime.MINUTES,
         state_class=SensorStateClass.TOTAL,
+        value_fn=lambda data: (data.get("sleep") or {}).get("minutesCalm"),
     ),
     TractiveSensorEntityDescription(
         key=ATTR_DAILY_GOAL,
         translation_key="daily_goal",
         native_unit_of_measurement=UnitOfTime.MINUTES,
+        value_fn=lambda data: (data.get("activity") or {}).get("minutesGoal"),
     ),
     TractiveSensorEntityDescription(
         key=ATTR_MINUTES_DAY_SLEEP,
         translation_key="minutes_day_sleep",
         native_unit_of_measurement=UnitOfTime.MINUTES,
         state_class=SensorStateClass.TOTAL,
+        value_fn=lambda data: (data.get("sleep") or {}).get("minutesDaySleep"),
     ),
     TractiveSensorEntityDescription(
         key=ATTR_MINUTES_NIGHT_SLEEP,
         translation_key="minutes_night_sleep",
         native_unit_of_measurement=UnitOfTime.MINUTES,
         state_class=SensorStateClass.TOTAL,
+        value_fn=lambda data: (data.get("sleep") or {}).get("minutesNightSleep"),
     ),
 )
 
