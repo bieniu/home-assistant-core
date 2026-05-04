@@ -307,7 +307,7 @@ class TractiveClient:
         payload = {}
         for switch, key in SWITCH_KEY_MAP.items():
             if switch_data := event.get(key):
-                payload[switch] = switch_data["active"]
+                payload[switch] = switch_data
         if hardware := event.get("hardware", {}):
             payload[ATTR_POWER_SAVING] = (
                 hardware.get("power_saving_zone_id") is not None

@@ -1,6 +1,7 @@
 """Support for Tractive switches."""
 
 from dataclasses import dataclass
+from datetime import datetime
 import logging
 from typing import Any, Literal
 
@@ -8,9 +9,10 @@ from aiotractive.exceptions import TractiveError
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 
 from . import Trackables, TractiveClient, TractiveConfigEntry
 from .const import (
@@ -96,6 +98,18 @@ class TractiveSwitch(TractiveEntity, SwitchEntity):
         self._tracker = item.tracker
         self._method = getattr(self, description.method)
         self.entity_description = description
+        self._cancel_remaining_timer: CALLBACK_TYPE | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity which will be added."""
+        await super().async_added_to_hass()
+
+        @callback
+        def _cancel_timer() -> None:
+            if self._cancel_remaining_timer:
+                self._cancel_remaining_timer()
+
+        self.async_on_remove(_cancel_timer)
 
     @callback
     def handle_status_update(self, event: dict[str, Any]) -> None:
@@ -104,7 +118,24 @@ class TractiveSwitch(TractiveEntity, SwitchEntity):
             self._attr_available = not event[ATTR_POWER_SAVING]
 
         if self.entity_description.key in event:
-            self._attr_is_on = event[self.entity_description.key]
+            key_data = event[self.entity_description.key]
+            self._attr_is_on = key_data["active"]
+
+            if self._cancel_remaining_timer:
+                self._cancel_remaining_timer()
+                self._cancel_remaining_timer = None
+
+            if (remaining := key_data.get("remaining", 0)) > 0:
+
+                @callback
+                def _auto_turn_off(_now: datetime) -> None:
+                    self._attr_is_on = False
+                    self._cancel_remaining_timer = None
+                    self.async_write_ha_state()
+
+                self._cancel_remaining_timer = async_call_later(
+                    self.hass, remaining, _auto_turn_off
+                )
 
         self.async_write_ha_state()
 
