@@ -1,0 +1,55 @@
+# serializer version: 1
+# name: test_camera_entity_setup[camera.test_name-entry]
+  EntityRegistryEntrySnapshot({
+    'aliases': list([
+      None,
+    ]),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'camera',
+    'entity_category': None,
+    'entity_id': 'camera.test_name',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': None,
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': None,
+    'original_name': None,
+    'platform': 'shelly',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': <CameraEntityFeature: 3>,
+    'translation_key': None,
+    'unique_id': '123456789ABC-camera:0',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_camera_entity_setup[camera.test_name-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'access_token': '1caab5c3b3',
+      'entity_picture': '/api/camera_proxy/camera.test_name?token=1caab5c3b3',
+      'friendly_name': 'Test name',
+      'motion_detection': True,
+      'supported_features': <CameraEntityFeature: 3>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'camera.test_name',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'idle',
+  })
+# ---
