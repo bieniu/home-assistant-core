@@ -1,15 +1,26 @@
 """Support for Shelly cameras."""
 
-import aiohttp
+import logging
 
-from homeassistant.components.camera import Camera, CameraEntityFeature
-from homeassistant.core import HomeAssistant
+import aiohttp
+from webrtc_models import RTCIceCandidateInit
+
+from homeassistant.components.camera import (
+    Camera,
+    CameraEntityFeature,
+    WebRTCAnswer,
+    WebRTCError,
+    WebRTCSendMessage,
+)
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import ShellyConfigEntry, ShellyRpcCoordinator
 from .entity import ShellyRpcEntity
 from .utils import get_rpc_key_instances
+
+_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
@@ -30,7 +41,7 @@ async def async_setup_entry(
 
 
 class ShellyCameraEntity(ShellyRpcEntity, Camera):
-    """Shelly camera entity for RPC-based Gen2/Gen3 devices."""
+    """Shelly camera entity for RPC devices."""
 
     _attr_name = None
     _attr_supported_features = CameraEntityFeature.ON_OFF | CameraEntityFeature.STREAM
@@ -40,6 +51,8 @@ class ShellyCameraEntity(ShellyRpcEntity, Camera):
         ShellyRpcEntity.__init__(self, coordinator, key)
         Camera.__init__(self)
         self._camera_id: int = int(key.split(":")[1])
+        self._whep_sessions: dict[str, str] = {}
+        self._offer_ice_credentials: dict[str, tuple[str, str]] = {}
 
     @property
     def is_on(self) -> bool:
@@ -54,21 +67,102 @@ class ShellyCameraEntity(ShellyRpcEntity, Camera):
     @property
     def is_streaming(self) -> bool:
         """Return True if the camera is currently streaming."""
-        return self.status["streams"] > 0
+        return bool(self.status["streams"] > 0)
 
     @property
     def motion_detection_enabled(self) -> bool:
         """Return True if camera is armed (motion detection active)."""
-        return self.coordinator.device.config[self.key]["arm"]
+        return bool(self.coordinator.device.config[self.key]["arm"])
 
     @property
     def use_stream_for_stills(self) -> bool:
         """Use direct HTTP snapshot instead of stream for still images."""
         return False
 
-    async def stream_source(self) -> str | None:
-        """Return the WHEP stream source URL for go2rtc."""
-        return f"webrtc:{self.coordinator.configuration_url}/camera/{self._camera_id}/whep/0"
+    async def async_handle_async_webrtc_offer(
+        self, offer_sdp: str, session_id: str, send_message: WebRTCSendMessage
+    ) -> None:
+        """Handle WebRTC offer by proxying to Shelly's WHEP endpoint."""
+        whep_url = (
+            f"{self.coordinator.configuration_url}/camera/{self._camera_id}/whep/0"
+        )
+        session = async_get_clientsession(self.hass)
+        try:
+            async with session.post(
+                whep_url,
+                data=offer_sdp,
+                headers={"Content-Type": "application/sdp"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status != 201:
+                    send_message(
+                        WebRTCError(
+                            "shelly_webrtc_offer_failed",
+                            f"WHEP endpoint returned HTTP {resp.status}",
+                        )
+                    )
+                    return
+                answer_sdp = await resp.text()
+                location = resp.headers.get("Location", "")
+        except (aiohttp.ClientError, TimeoutError) as err:
+            send_message(WebRTCError("shelly_webrtc_offer_failed", str(err)))
+            return
+
+        if location:
+            base = self.coordinator.configuration_url.rstrip("/")
+            full_location = (
+                f"{base}{location}" if location.startswith("/") else location
+            )
+            self._whep_sessions[session_id] = full_location
+        self._offer_ice_credentials[session_id] = _parse_sdp_ice_credentials(offer_sdp)
+        send_message(WebRTCAnswer(answer_sdp))
+
+    async def async_on_webrtc_candidate(
+        self, session_id: str, candidate: RTCIceCandidateInit
+    ) -> None:
+        """Forward ICE candidate to Shelly via WHEP trickle ICE."""
+        session_url = self._whep_sessions.get(session_id)
+        if not session_url or not candidate.candidate:
+            return
+        ufrag, pwd = self._offer_ice_credentials.get(session_id, ("", ""))
+        mid = candidate.sdp_mid or "0"
+        candidate_value = candidate.candidate.removeprefix("a=")
+        body = (
+            f"a=ice-ufrag:{ufrag}\r\n"
+            f"a=ice-pwd:{pwd}\r\n"
+            f"m=video 9 RTP/AVP 0\r\n"
+            f"a=mid:{mid}\r\n"
+            f"a=candidate:{candidate_value}\r\n"
+        )
+        http_session = async_get_clientsession(self.hass)
+        try:
+            await http_session.patch(
+                session_url,
+                data=body,
+                headers={"Content-Type": "application/trickle-ice-sdpfrag"},
+                timeout=aiohttp.ClientTimeout(total=5),
+            )
+        except (aiohttp.ClientError, TimeoutError) as err:
+            _LOGGER.debug("Failed to send ICE candidate to Shelly: %s", err)
+
+    @callback
+    def close_webrtc_session(self, session_id: str) -> None:
+        """Close the WHEP session on Shelly."""
+        self._offer_ice_credentials.pop(session_id, None)
+        if session_url := self._whep_sessions.pop(session_id, None):
+
+            async def _delete_session() -> None:
+                http_session = async_get_clientsession(self.hass)
+                try:
+                    await http_session.delete(
+                        session_url,
+                        timeout=aiohttp.ClientTimeout(total=5),
+                    )
+                except (aiohttp.ClientError, TimeoutError) as err:
+                    _LOGGER.debug("Failed to delete WHEP session: %s", err)
+
+            self.hass.async_create_task(_delete_session())
+        super().close_webrtc_session(session_id)
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
@@ -113,3 +207,15 @@ class ShellyCameraEntity(ShellyRpcEntity, Camera):
             "Camera.SetConfig",
             {"id": self._camera_id, "config": {"arm": False}},
         )
+
+
+def _parse_sdp_ice_credentials(sdp: str) -> tuple[str, str]:
+    """Extract ice-ufrag and ice-pwd from an SDP string."""
+    ufrag = ""
+    pwd = ""
+    for line in sdp.splitlines():
+        if line.startswith("a=ice-ufrag:"):
+            ufrag = line[12:]
+        elif line.startswith("a=ice-pwd:"):
+            pwd = line[10:]
+    return ufrag, pwd
