@@ -7,15 +7,15 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from homeassistant.components.camera import (
+    DATA_COMPONENT,
+    DOMAIN as CAMERA_DOMAIN,
     SERVICE_DISABLE_MOTION,
     SERVICE_ENABLE_MOTION,
     CameraState,
+    WebRTCAnswer,
+    WebRTCError,
+    get_camera_from_entity_id,
 )
-from homeassistant.components.camera.const import (
-    DATA_COMPONENT,
-    DOMAIN as CAMERA_DOMAIN,
-)
-from homeassistant.components.camera.helper import get_camera_from_entity_id
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     SERVICE_TURN_OFF,
@@ -219,18 +219,59 @@ async def test_camera_image_snapshot_error(
     assert result is None
 
 
-async def test_camera_stream_source(
+async def test_camera_webrtc_offer(
     hass: HomeAssistant,
     mock_camera_rpc_device: Mock,
+    aioclient_mock: AiohttpClientMocker,
 ) -> None:
-    """Test stream_source returns WHEP URL for go2rtc."""
+    """Test async_handle_async_webrtc_offer proxies SDP to Shelly's WHEP endpoint."""
     await init_integration(hass, 3)
 
+    offer_sdp = "v=0\r\na=ice-ufrag:testufrag\r\na=ice-pwd:testpwd\r\n"
+    answer_sdp = "v=0\r\na=ice-ufrag:remote\r\na=ice-pwd:remotepwd\r\n"
+    aioclient_mock.post(
+        "http://192.168.1.37:80/camera/0/whep/0",
+        status=201,
+        text=answer_sdp,
+        headers={"Location": "/camera/0/whep/0/sess1"},
+    )
+
     camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
-    source = await camera.stream_source()
-    assert source is not None
-    assert source.startswith("webrtc:http://")
-    assert "/camera/0/whep/0" in source
+    messages: list[WebRTCAnswer | WebRTCError] = []
+
+    def send_message(message: WebRTCAnswer | WebRTCError) -> None:
+        messages.append(message)
+
+    await camera.async_handle_async_webrtc_offer(offer_sdp, "session1", send_message)
+
+    assert len(messages) == 1
+    assert isinstance(messages[0], WebRTCAnswer)
+    assert messages[0].answer == answer_sdp
+
+
+async def test_camera_webrtc_offer_error(
+    hass: HomeAssistant,
+    mock_camera_rpc_device: Mock,
+    aioclient_mock: AiohttpClientMocker,
+) -> None:
+    """Test async_handle_async_webrtc_offer sends WebRTCError on WHEP failure."""
+    await init_integration(hass, 3)
+
+    aioclient_mock.post(
+        "http://192.168.1.37:80/camera/0/whep/0",
+        status=500,
+    )
+
+    camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
+    messages: list[WebRTCAnswer | WebRTCError] = []
+
+    def send_message(message: WebRTCAnswer | WebRTCError) -> None:
+        messages.append(message)
+
+    await camera.async_handle_async_webrtc_offer("v=0\r\n", "session1", send_message)
+
+    assert len(messages) == 1
+    assert isinstance(messages[0], WebRTCError)
 
 
 async def test_camera_off_when_privacy_enabled(
