@@ -19,6 +19,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .const import CAMERA_SNAPSHOT_URL, CAMERA_WHEP_URL
 from .coordinator import ShellyConfigEntry, ShellyRpcCoordinator
 from .entity import (
     RpcEntityDescription,
@@ -91,6 +92,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         Camera.__init__(self)
         self._whep_sessions: dict[str, str] = {}
         self._offer_ice_credentials: dict[str, tuple[str, str]] = {}
+        self._host = f"{coordinator.device.ip_address}:{coordinator.device.port}"
 
     @property
     def is_on(self) -> bool:
@@ -121,11 +123,14 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         self, offer_sdp: str, session_id: str, send_message: WebRTCSendMessage
     ) -> None:
         """Handle WebRTC offer by proxying to Shelly's WHEP endpoint."""
-        whep_url = f"{self.coordinator.configuration_url}/camera/{self._id}/whep/{self.entity_description.stream}"
         session = async_get_clientsession(self.hass)
         try:
             async with session.post(
-                whep_url,
+                CAMERA_WHEP_URL.format(
+                    host=self._host,
+                    camera_id=self._id,
+                    stream_id=self.entity_description.stream,
+                ),
                 data=offer_sdp,
                 headers={"Content-Type": "application/sdp"},
                 timeout=aiohttp.ClientTimeout(total=10),
@@ -205,10 +210,13 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     ) -> bytes | None:
         """Return a still image from the camera's HTTP snapshot endpoint."""
         session = async_get_clientsession(self.hass)
-        url = f"{self.coordinator.configuration_url}/camera/{self._id}/snapshot"
         try:
             async with session.get(
-                url, timeout=aiohttp.ClientTimeout(total=10)
+                CAMERA_SNAPSHOT_URL.format(
+                    host=self._host,
+                    camera_id=self._id,
+                ),
+                timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 if resp.status == 200:
                     return await resp.read()
