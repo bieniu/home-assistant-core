@@ -30,7 +30,7 @@ from . import MOCK_MAC, init_integration, patch_platforms
 from tests.common import snapshot_platform
 from tests.test_util.aiohttp import AiohttpClientMocker
 
-CAMERA_ENTITY_ID = "camera.test_name"
+CAMERA_ENTITY_ID = "camera.test_name_stream_0"
 
 MOCK_CAMERA_CONFIG = {
     "camera:0": {
@@ -88,7 +88,7 @@ async def test_camera_entity_setup(
     await snapshot_platform(hass, entity_registry, snapshot, entry.entry_id)
 
     assert (er_entry := entity_registry.async_get(CAMERA_ENTITY_ID))
-    assert er_entry.unique_id == f"{MOCK_MAC}-camera:0-camera"
+    assert er_entry.unique_id == f"{MOCK_MAC}-camera:0-stream_0"
 
 
 async def test_camera_state_streaming(
