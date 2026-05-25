@@ -88,7 +88,7 @@ async def test_camera_entity_setup(
     await snapshot_platform(hass, entity_registry, snapshot, entry.entry_id)
 
     assert (er_entry := entity_registry.async_get(CAMERA_ENTITY_ID))
-    assert er_entry.unique_id == f"{MOCK_MAC}-camera:0"
+    assert er_entry.unique_id == f"{MOCK_MAC}-camera:0-camera"
 
 
 async def test_camera_state_streaming(
