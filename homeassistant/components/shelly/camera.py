@@ -39,9 +39,17 @@ class RpcCameraEntityDescription(RpcEntityDescription, CameraEntityDescription):
 
 
 RPC_CAMERA_ENTITIES: Final = {
-    "camera": RpcCameraEntityDescription(
+    "stream_0": RpcCameraEntityDescription(
         key="camera",
         stream=0,
+        translation_key="stream",
+        translation_placeholders={"stream_id": "0"},
+    ),
+    "stream_1": RpcCameraEntityDescription(
+        key="camera",
+        stream=1,
+        translation_key="stream",
+        translation_placeholders={"stream_id": "1"},
     ),
 }
 
@@ -66,7 +74,6 @@ async def async_setup_entry(
 class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     """Shelly camera entity for RPC devices."""
 
-    _attr_name = None
     _attr_supported_features = CameraEntityFeature.ON_OFF | CameraEntityFeature.STREAM
     entity_description: RpcCameraEntityDescription
 
