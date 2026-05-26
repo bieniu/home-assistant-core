@@ -97,7 +97,10 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     @property
     def is_on(self) -> bool:
         """Return True if the camera is on (privacy mode disabled)."""
-        return not self.coordinator.device.config[self.key]["privacy"]
+        if not self.coordinator.device.initialized:
+            return False
+
+        return bool(self.status["streamer"] == "running")
 
     @property
     def is_recording(self) -> bool:
@@ -112,6 +115,9 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     @property
     def motion_detection_enabled(self) -> bool:
         """Return True if camera is armed (motion detection active)."""
+        if not self.coordinator.device.initialized:
+            return False
+
         return bool(self.coordinator.device.config[self.key]["arm"])
 
     @property
