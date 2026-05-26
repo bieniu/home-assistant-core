@@ -156,9 +156,10 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
             return
 
         if location:
-            base = self.coordinator.configuration_url.rstrip("/")
             full_location = (
-                f"{base}{location}" if location.startswith("/") else location
+                f"http://{self._host}{location}"
+                if location.startswith("/")
+                else location
             )
             self._whep_sessions[session_id] = full_location
         self._offer_ice_credentials[session_id] = _parse_sdp_ice_credentials(offer_sdp)
