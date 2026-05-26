@@ -47,7 +47,7 @@ MOCK_CAMERA_CONFIG = {
 MOCK_CAMERA_STATUS = {
     "camera:0": {
         "id": 0,
-        "streamer": "idle",
+        "streamer": "running",
         "motion": False,
         "streams": 0,
         "recordings": None,
@@ -71,6 +71,8 @@ def mock_camera_rpc_device(
     monkeypatch.setattr(mock_rpc_device, "config", config)
     status = deepcopy(mock_rpc_device.status) | MOCK_CAMERA_STATUS
     monkeypatch.setattr(mock_rpc_device, "status", status)
+    monkeypatch.setattr(mock_rpc_device, "ip_address", "192.168.1.37")
+    monkeypatch.setattr(mock_rpc_device, "port", 80)
     return mock_rpc_device
 
 
@@ -274,21 +276,37 @@ async def test_camera_webrtc_offer_error(
     assert isinstance(messages[0], WebRTCError)
 
 
-async def test_camera_off_when_privacy_enabled(
+async def test_camera_off_when_streamer_stopped(
     hass: HomeAssistant,
     mock_camera_rpc_device: Mock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test camera is off when privacy mode is enabled in config."""
-    config = deepcopy(mock_camera_rpc_device.config)
-    config["camera:0"]["privacy"] = True
-    monkeypatch.setattr(mock_camera_rpc_device, "config", config)
+    """Test camera is off when the streamer is not running."""
+    status = deepcopy(mock_camera_rpc_device.status)
+    status["camera:0"]["streamer"] = "stopped"
+    monkeypatch.setattr(mock_camera_rpc_device, "status", status)
 
     await init_integration(hass, 3)
 
     camera = hass.data[DATA_COMPONENT].get_entity(CAMERA_ENTITY_ID)
     assert camera is not None
     assert camera.is_on is False
+
+
+async def test_camera_properties_when_device_not_initialized(
+    hass: HomeAssistant,
+    mock_camera_rpc_device: Mock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test camera properties return safe values when the device is not initialized."""
+    await init_integration(hass, 3)
+
+    camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
+
+    monkeypatch.setattr(mock_camera_rpc_device, "initialized", False)
+
+    assert camera.is_on is False
+    assert camera.motion_detection_enabled is False
 
 
 async def test_camera_motion_detection_enabled_reflects_config(
