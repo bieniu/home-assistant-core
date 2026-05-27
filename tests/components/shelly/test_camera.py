@@ -33,48 +33,12 @@ from tests.test_util.aiohttp import AiohttpClientMocker
 
 CAMERA_ENTITY_ID = "camera.test_name_stream_0"
 
-MOCK_CAMERA_CONFIG = {
-    "camera:0": {
-        "id": 0,
-        "privacy": False,
-        "arm": True,
-        "audio": {"enable": False},
-        "night_vision": {"mode": "auto"},
-        "video": {"quality": "medium"},
-        "streams": [{"width": 1920, "height": 1080}],
-    }
-}
-
-MOCK_CAMERA_STATUS = {
-    "camera:0": {
-        "id": 0,
-        "streamer": "running",
-        "motion": False,
-        "streams": 0,
-        "recordings": None,
-    }
-}
-
 
 @pytest.fixture(autouse=True)
 def fixture_platforms() -> Generator[None]:
     """Limit platforms under test."""
     with patch_platforms([Platform.CAMERA]):
         yield
-
-
-@pytest.fixture
-def mock_camera_rpc_device(
-    monkeypatch: pytest.MonkeyPatch, mock_rpc_device: Mock
-) -> Mock:
-    """Set up mock RPC device with camera component data."""
-    config = deepcopy(mock_rpc_device.config) | MOCK_CAMERA_CONFIG
-    monkeypatch.setattr(mock_rpc_device, "config", config)
-    status = deepcopy(mock_rpc_device.status) | MOCK_CAMERA_STATUS
-    monkeypatch.setattr(mock_rpc_device, "status", status)
-    monkeypatch.setattr(mock_rpc_device, "ip_address", "192.168.1.37")
-    monkeypatch.setattr(mock_rpc_device, "port", 80)
-    return mock_rpc_device
 
 
 async def test_camera_entity_setup(
