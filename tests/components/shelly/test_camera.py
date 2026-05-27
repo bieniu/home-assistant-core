@@ -1,5 +1,6 @@
 """Tests for Shelly camera platform."""
 
+from collections.abc import Generator
 from copy import deepcopy
 from unittest.mock import Mock, patch
 
@@ -56,7 +57,7 @@ MOCK_CAMERA_STATUS = {
 
 
 @pytest.fixture(autouse=True)
-def fixture_platforms() -> None:
+def fixture_platforms() -> Generator[None]:
     """Limit platforms under test."""
     with patch_platforms([Platform.CAMERA]):
         yield
