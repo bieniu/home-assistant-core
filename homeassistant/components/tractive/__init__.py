@@ -34,6 +34,7 @@ from .const import (
     CLIENT_ID,
     DOMAIN,
     RECONNECT_INTERVAL,
+    SERVER_AVAILABLE,
     SERVER_UNAVAILABLE,
     SWITCH_KEY_MAP,
     TRACKER_HARDWARE_STATUS_UPDATED,
@@ -242,6 +243,10 @@ class TractiveClient:
                     if server_was_unavailable:
                         _LOGGER.debug("Tractive is back online")
                         server_was_unavailable = False
+                        async_dispatcher_send(
+                            self._hass,
+                            f"{SERVER_AVAILABLE}-{self._user_id}",
+                        )
                     if event["message"] == "health_overview":
                         self.send_health_overview_update(event)
                         continue

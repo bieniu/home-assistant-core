@@ -27,6 +27,7 @@ TRACKER_SWITCH_STATUS_UPDATED = f"{DOMAIN}_tracker_switch_updated"
 TRACKER_HEALTH_OVERVIEW_UPDATED = f"{DOMAIN}_tracker_health_overview_updated"
 
 SERVER_UNAVAILABLE = f"{DOMAIN}_server_unavailable"
+SERVER_AVAILABLE = f"{DOMAIN}_server_available"
 
 SWITCH_KEY_MAP = {
     ATTR_LIVE_TRACKING: "live_tracking",

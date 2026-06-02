@@ -8,7 +8,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 
 from . import TractiveClient
-from .const import DOMAIN, SERVER_UNAVAILABLE
+from .const import DOMAIN, SERVER_AVAILABLE, SERVER_UNAVAILABLE
 
 
 class TractiveEntity(Entity):
@@ -68,6 +68,14 @@ class TractiveEntity(Entity):
             )
         )
 
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                f"{SERVER_AVAILABLE}-{self._user_id}",
+                self.handle_server_available,
+            )
+        )
+
     @callback
     def handle_status_update(self, event: dict[str, Any]) -> None:
         """Handle status update."""
@@ -78,4 +86,10 @@ class TractiveEntity(Entity):
     def handle_server_unavailable(self) -> None:
         """Handle server unavailable."""
         self._attr_available = False
+        self.async_write_ha_state()
+
+    @callback
+    def handle_server_available(self) -> None:
+        """Handle server available."""
+        self._attr_available = True
         self.async_write_ha_state()
