@@ -6,6 +6,9 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from syrupy.assertion import SnapshotAssertion
+from webrtc_models import RTCIceCandidateInit
+
+from aioshelly.exceptions import RpcCallError
 
 from homeassistant.components.camera import (
     DATA_COMPONENT,
@@ -21,7 +24,6 @@ from homeassistant.helpers.entity_registry import EntityRegistry
 from . import MOCK_MAC, init_integration, patch_platforms
 
 from tests.common import snapshot_platform
-from tests.test_util.aiohttp import AiohttpClientMocker
 
 CAMERA_ENTITY_ID = "camera.test_name_stream_0"
 
@@ -117,18 +119,18 @@ async def test_camera_image_snapshot_error(
 async def test_camera_webrtc_offer(
     hass: HomeAssistant,
     mock_camera_rpc_device: Mock,
-    aioclient_mock: AiohttpClientMocker,
 ) -> None:
     """Test async_handle_async_webrtc_offer proxies SDP to Shelly's WHEP endpoint."""
     await init_integration(hass, 3)
 
     offer_sdp = "v=0\r\na=ice-ufrag:testufrag\r\na=ice-pwd:testpwd\r\n"
     answer_sdp = "v=0\r\na=ice-ufrag:remote\r\na=ice-pwd:remotepwd\r\n"
-    aioclient_mock.post(
-        "http://192.168.1.37:80/camera/0/whep/0",
-        status=201,
-        text=answer_sdp,
-        headers={"Location": "/camera/0/whep/0/sess1"},
+    mock_camera_rpc_device.camera_start_webrtc_session = AsyncMock(
+        return_value=(
+            answer_sdp,
+            "http://192.168.1.37:80/camera/0/whep/0/sess1",
+            ("testufrag", "testpwd"),
+        )
     )
 
     camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
@@ -142,19 +144,22 @@ async def test_camera_webrtc_offer(
     assert len(messages) == 1
     assert isinstance(messages[0], WebRTCAnswer)
     assert messages[0].answer == answer_sdp
+    mock_camera_rpc_device.camera_start_webrtc_session.assert_awaited_once_with(
+        0,
+        0,
+        offer_sdp,
+    )
 
 
 async def test_camera_webrtc_offer_error(
     hass: HomeAssistant,
     mock_camera_rpc_device: Mock,
-    aioclient_mock: AiohttpClientMocker,
 ) -> None:
     """Test async_handle_async_webrtc_offer sends WebRTCError on WHEP failure."""
     await init_integration(hass, 3)
 
-    aioclient_mock.post(
-        "http://192.168.1.37:80/camera/0/whep/0",
-        status=500,
+    mock_camera_rpc_device.camera_start_webrtc_session = AsyncMock(
+        side_effect=RpcCallError(500, "WHEP endpoint returned HTTP 500")
     )
 
     camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
@@ -167,6 +172,64 @@ async def test_camera_webrtc_offer_error(
 
     assert len(messages) == 1
     assert isinstance(messages[0], WebRTCError)
+
+
+async def test_camera_webrtc_candidate(
+    hass: HomeAssistant,
+    mock_camera_rpc_device: Mock,
+) -> None:
+    """Test async_on_webrtc_candidate forwards candidate via device method."""
+    await init_integration(hass, 3)
+
+    offer_sdp = "v=0\r\na=ice-ufrag:testufrag\r\na=ice-pwd:testpwd\r\n"
+    mock_camera_rpc_device.camera_start_webrtc_session = AsyncMock(
+        return_value=(
+            "v=0\r\n",
+            "http://192.168.1.37:80/camera/0/whep/0/sess1",
+            ("testufrag", "testpwd"),
+        )
+    )
+    mock_camera_rpc_device.camera_send_webrtc_candidate = AsyncMock()
+
+    camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
+    await camera.async_handle_async_webrtc_offer(offer_sdp, "session1", lambda _: None)
+    await camera.async_on_webrtc_candidate(
+        "session1", RTCIceCandidateInit("candidate", sdp_mid="1")
+    )
+
+    mock_camera_rpc_device.camera_send_webrtc_candidate.assert_awaited_once_with(
+        "http://192.168.1.37:80/camera/0/whep/0/sess1",
+        ("testufrag", "testpwd"),
+        "candidate",
+        "1",
+    )
+
+
+async def test_camera_close_webrtc_session(
+    hass: HomeAssistant,
+    mock_camera_rpc_device: Mock,
+) -> None:
+    """Test close_webrtc_session closes the session via device method."""
+    await init_integration(hass, 3)
+
+    mock_camera_rpc_device.camera_start_webrtc_session = AsyncMock(
+        return_value=(
+            "v=0\r\n",
+            "http://192.168.1.37:80/camera/0/whep/0/sess1",
+            ("testufrag", "testpwd"),
+        )
+    )
+    mock_camera_rpc_device.camera_close_webrtc_session = AsyncMock()
+
+    camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
+    await camera.async_handle_async_webrtc_offer("v=0\r\n", "session1", lambda _: None)
+
+    camera.close_webrtc_session("session1")
+    await hass.async_block_till_done()
+
+    mock_camera_rpc_device.camera_close_webrtc_session.assert_awaited_once_with(
+        "http://192.168.1.37:80/camera/0/whep/0/sess1"
+    )
 
 
 async def test_camera_off_when_streamer_stopped(
