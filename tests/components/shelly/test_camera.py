@@ -2,7 +2,7 @@
 
 from collections.abc import Generator
 from copy import deepcopy
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from syrupy.assertion import SnapshotAssertion
@@ -89,15 +89,12 @@ async def test_camera_state_recording(
 async def test_camera_image_snapshot(
     hass: HomeAssistant,
     mock_camera_rpc_device: Mock,
-    aioclient_mock: AiohttpClientMocker,
 ) -> None:
     """Test async_camera_image fetches snapshot from the camera's HTTP endpoint."""
     await init_integration(hass, 3)
 
-    aioclient_mock.get(
-        "http://192.168.1.37:80/camera/0/snapshot",
-        content=b"jpeg_data",
-    )
+    mock_camera_rpc_device.camera_get_image = AsyncMock(return_value=b"jpeg_data")
+
     camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
     result = await camera.async_camera_image()
     assert result == b"jpeg_data"
@@ -106,15 +103,12 @@ async def test_camera_image_snapshot(
 async def test_camera_image_snapshot_error(
     hass: HomeAssistant,
     mock_camera_rpc_device: Mock,
-    aioclient_mock: AiohttpClientMocker,
 ) -> None:
     """Test async_camera_image returns None on HTTP error."""
     await init_integration(hass, 3)
 
-    aioclient_mock.get(
-        "http://192.168.1.37:80/camera/0/snapshot",
-        status=500,
-    )
+    mock_camera_rpc_device.camera_get_image = AsyncMock(return_value=None)
+
     camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
     result = await camera.async_camera_image()
     assert result is None

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 import logging
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 import aiohttp
 from webrtc_models import RTCIceCandidateInit
@@ -19,7 +19,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import CAMERA_SNAPSHOT_URL, CAMERA_WHEP_URL
+from .const import CAMERA_WHEP_URL
 from .coordinator import ShellyConfigEntry, ShellyRpcCoordinator
 from .entity import (
     RpcEntityDescription,
@@ -215,20 +215,13 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
         """Return a still image from the camera's HTTP snapshot endpoint."""
-        session = async_get_clientsession(self.hass)
+        if TYPE_CHECKING:
+            assert self._id is not None
+
         try:
-            async with session.get(
-                CAMERA_SNAPSHOT_URL.format(
-                    host=self._host,
-                    camera_id=self._id,
-                ),
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                if resp.status == 200:
-                    return await resp.read()
+            return await self.coordinator.device.camera_get_image(self._id)
         except aiohttp.ClientError, TimeoutError:
             return None
-        return None
 
 
 def _parse_sdp_ice_credentials(sdp: str) -> tuple[str, str]:
