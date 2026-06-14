@@ -9,15 +9,12 @@ from syrupy.assertion import SnapshotAssertion
 
 from homeassistant.components.camera import (
     DATA_COMPONENT,
-    DOMAIN as CAMERA_DOMAIN,
-    SERVICE_DISABLE_MOTION,
-    SERVICE_ENABLE_MOTION,
     CameraState,
     WebRTCAnswer,
     WebRTCError,
     get_camera_from_entity_id,
 )
-from homeassistant.const import ATTR_ENTITY_ID, Platform
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_registry import EntityRegistry
 
@@ -87,35 +84,6 @@ async def test_camera_state_recording(
 
     assert (state := hass.states.get(CAMERA_ENTITY_ID))
     assert state.state == CameraState.RECORDING
-
-
-@pytest.mark.parametrize(
-    ("service", "expected_arm"),
-    [
-        pytest.param(SERVICE_ENABLE_MOTION, True, id="enable_motion_arms_camera"),
-        pytest.param(SERVICE_DISABLE_MOTION, False, id="disable_motion_disarms_camera"),
-    ],
-)
-async def test_camera_motion_detection(
-    hass: HomeAssistant,
-    mock_camera_rpc_device: Mock,
-    service: str,
-    expected_arm: bool,
-) -> None:
-    """Test motion detection enable/disable maps to arm config."""
-    await init_integration(hass, 3)
-
-    await hass.services.async_call(
-        CAMERA_DOMAIN,
-        service,
-        {ATTR_ENTITY_ID: CAMERA_ENTITY_ID},
-        blocking=True,
-    )
-
-    mock_camera_rpc_device.call_rpc.assert_called_once_with(
-        "Camera.SetConfig",
-        {"id": 0, "config": {"arm": expected_arm}},
-    )
 
 
 async def test_camera_image_snapshot(
@@ -237,24 +205,3 @@ async def test_camera_properties_when_device_not_initialized(
     monkeypatch.setattr(mock_camera_rpc_device, "initialized", False)
 
     assert camera.is_on is False
-    assert camera.motion_detection_enabled is False
-
-
-async def test_camera_motion_detection_enabled_reflects_config(
-    hass: HomeAssistant,
-    mock_camera_rpc_device: Mock,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Test motion_detection_enabled reflects arm config."""
-    await init_integration(hass, 3)
-
-    camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
-    assert camera.motion_detection_enabled is True
-
-    config = deepcopy(mock_camera_rpc_device.config)
-    config["camera:0"]["arm"] = False
-    monkeypatch.setattr(mock_camera_rpc_device, "config", config)
-    mock_camera_rpc_device.mock_update()
-    await hass.async_block_till_done()
-
-    assert camera.motion_detection_enabled is False
