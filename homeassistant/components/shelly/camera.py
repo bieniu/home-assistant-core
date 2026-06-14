@@ -5,6 +5,7 @@ import logging
 from typing import TYPE_CHECKING, Final
 
 import aiohttp
+from aioshelly.exceptions import RpcCallError
 from webrtc_models import RTCIceCandidateInit
 
 from homeassistant.components.camera import (
@@ -16,10 +17,8 @@ from homeassistant.components.camera import (
     WebRTCSendMessage,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import CAMERA_WHEP_URL
 from .coordinator import ShellyConfigEntry, ShellyRpcCoordinator
 from .entity import (
     RpcEntityDescription,
@@ -92,7 +91,6 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         Camera.__init__(self)
         self._whep_sessions: dict[str, str] = {}
         self._offer_ice_credentials: dict[str, tuple[str, str]] = {}
-        self._host = f"{coordinator.device.ip_address}:{coordinator.device.port}"
 
     @property
     def available(self) -> bool:
@@ -128,40 +126,29 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         self, offer_sdp: str, session_id: str, send_message: WebRTCSendMessage
     ) -> None:
         """Handle WebRTC offer by proxying to Shelly's WHEP endpoint."""
-        session = async_get_clientsession(self.hass)
+        if TYPE_CHECKING:
+            assert self._id is not None
+
         try:
-            async with session.post(
-                CAMERA_WHEP_URL.format(
-                    host=self._host,
-                    camera_id=self._id,
-                    stream_id=self.entity_description.stream,
-                ),
-                data=offer_sdp,
-                headers={"Content-Type": "application/sdp"},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                if resp.status != 201:
-                    send_message(
-                        WebRTCError(
-                            "shelly_webrtc_offer_failed",
-                            f"WHEP endpoint returned HTTP {resp.status}",
-                        )
-                    )
-                    return
-                answer_sdp = await resp.text()
-                location = resp.headers.get("Location", "")
-        except (aiohttp.ClientError, TimeoutError) as err:
+            (
+                answer_sdp,
+                session_url,
+                offer_ice_credentials,
+            ) = await self.coordinator.device.camera_start_webrtc_session(
+                self._id,
+                self.entity_description.stream,
+                offer_sdp,
+            )
+        except (aiohttp.ClientError, TimeoutError, RpcCallError, ValueError) as err:
             send_message(WebRTCError("shelly_webrtc_offer_failed", str(err)))
             return
 
-        if location:
-            full_location = (
-                f"http://{self._host}{location}"
-                if location.startswith("/")
-                else location
-            )
-            self._whep_sessions[session_id] = full_location
-        self._offer_ice_credentials[session_id] = _parse_sdp_ice_credentials(offer_sdp)
+        if session_url:
+            self._whep_sessions[session_id] = session_url
+        else:
+            self._whep_sessions.pop(session_id, None)
+
+        self._offer_ice_credentials[session_id] = offer_ice_credentials
         send_message(WebRTCAnswer(answer_sdp))
 
     async def async_on_webrtc_candidate(
@@ -171,25 +158,15 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         session_url = self._whep_sessions.get(session_id)
         if not session_url or not candidate.candidate:
             return
-        ufrag, pwd = self._offer_ice_credentials.get(session_id, ("", ""))
-        mid = candidate.sdp_mid or "0"
-        candidate_value = candidate.candidate.removeprefix("a=")
-        body = (
-            f"a=ice-ufrag:{ufrag}\r\n"
-            f"a=ice-pwd:{pwd}\r\n"
-            f"m=video 9 RTP/AVP 0\r\n"
-            f"a=mid:{mid}\r\n"
-            f"a=candidate:{candidate_value}\r\n"
-        )
-        http_session = async_get_clientsession(self.hass)
+        offer_ice_credentials = self._offer_ice_credentials.get(session_id, ("", ""))
         try:
-            await http_session.patch(
+            await self.coordinator.device.camera_send_webrtc_candidate(
                 session_url,
-                data=body,
-                headers={"Content-Type": "application/trickle-ice-sdpfrag"},
-                timeout=aiohttp.ClientTimeout(total=5),
+                offer_ice_credentials,
+                candidate.candidate,
+                candidate.sdp_mid,
             )
-        except (aiohttp.ClientError, TimeoutError) as err:
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
             _LOGGER.debug("Failed to send ICE candidate to Shelly: %s", err)
 
     @callback
@@ -198,17 +175,15 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         self._offer_ice_credentials.pop(session_id, None)
         if session_url := self._whep_sessions.pop(session_id, None):
 
-            async def _delete_session() -> None:
-                http_session = async_get_clientsession(self.hass)
+            async def _close_session() -> None:
                 try:
-                    await http_session.delete(
-                        session_url,
-                        timeout=aiohttp.ClientTimeout(total=5),
+                    await self.coordinator.device.camera_close_webrtc_session(
+                        session_url
                     )
-                except (aiohttp.ClientError, TimeoutError) as err:
-                    _LOGGER.debug("Failed to delete WHEP session: %s", err)
+                except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+                    _LOGGER.debug("Failed to close WHEP session: %s", err)
 
-            self.hass.async_create_task(_delete_session())
+            self.hass.async_create_task(_close_session())
         super().close_webrtc_session(session_id)
 
     async def async_camera_image(
@@ -220,17 +195,5 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
 
         try:
             return await self.coordinator.device.camera_get_image(self._id)
-        except aiohttp.ClientError, TimeoutError:
+        except aiohttp.ClientError, TimeoutError, ValueError:
             return None
-
-
-def _parse_sdp_ice_credentials(sdp: str) -> tuple[str, str]:
-    """Extract ice-ufrag and ice-pwd from an SDP string."""
-    ufrag = ""
-    pwd = ""
-    for line in sdp.splitlines():
-        if line.startswith("a=ice-ufrag:"):
-            ufrag = line[12:]
-        elif line.startswith("a=ice-pwd:"):
-            pwd = line[10:]
-    return ufrag, pwd
