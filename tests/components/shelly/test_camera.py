@@ -17,12 +17,7 @@ from homeassistant.components.camera import (
     WebRTCError,
     get_camera_from_entity_id,
 )
-from homeassistant.const import (
-    ATTR_ENTITY_ID,
-    SERVICE_TURN_OFF,
-    SERVICE_TURN_ON,
-    Platform,
-)
+from homeassistant.const import ATTR_ENTITY_ID, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_registry import EntityRegistry
 
@@ -92,35 +87,6 @@ async def test_camera_state_recording(
 
     assert (state := hass.states.get(CAMERA_ENTITY_ID))
     assert state.state == CameraState.RECORDING
-
-
-@pytest.mark.parametrize(
-    ("service", "expected_privacy"),
-    [
-        pytest.param(SERVICE_TURN_OFF, True, id="turn_off_enables_privacy"),
-        pytest.param(SERVICE_TURN_ON, False, id="turn_on_disables_privacy"),
-    ],
-)
-async def test_camera_turn_on_off(
-    hass: HomeAssistant,
-    mock_camera_rpc_device: Mock,
-    service: str,
-    expected_privacy: bool,
-) -> None:
-    """Test camera turn on/off maps to privacy mode."""
-    await init_integration(hass, 3)
-
-    await hass.services.async_call(
-        CAMERA_DOMAIN,
-        service,
-        {ATTR_ENTITY_ID: CAMERA_ENTITY_ID},
-        blocking=True,
-    )
-
-    mock_camera_rpc_device.call_rpc.assert_called_once_with(
-        "Camera.SetConfig",
-        {"id": 0, "config": {"privacy": expected_privacy}},
-    )
 
 
 @pytest.mark.parametrize(

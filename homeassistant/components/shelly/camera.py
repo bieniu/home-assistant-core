@@ -75,7 +75,7 @@ async def async_setup_entry(
 class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     """Shelly camera entity for RPC devices."""
 
-    _attr_supported_features = CameraEntityFeature.ON_OFF | CameraEntityFeature.STREAM
+    _attr_supported_features = CameraEntityFeature.STREAM
     entity_description: RpcCameraEntityDescription
 
     def __init__(
@@ -95,8 +95,15 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         self._host = f"{coordinator.device.ip_address}:{coordinator.device.port}"
 
     @property
+    def available(self) -> bool:
+        """Available."""
+        available = super().available
+
+        return available and not self.coordinator.device.config[self.key]["privacy"]
+
+    @property
     def is_on(self) -> bool:
-        """Return True if the camera is on (privacy mode disabled)."""
+        """Return True if the camera is running."""
         if not self.coordinator.device.initialized:
             return False
 
@@ -230,20 +237,6 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         except aiohttp.ClientError, TimeoutError:
             return None
         return None
-
-    async def async_turn_on(self) -> None:
-        """Turn the camera on by disabling privacy mode."""
-        await self.call_rpc(
-            "Camera.SetConfig",
-            {"id": self._id, "config": {"privacy": False}},
-        )
-
-    async def async_turn_off(self) -> None:
-        """Turn the camera off by enabling privacy mode."""
-        await self.call_rpc(
-            "Camera.SetConfig",
-            {"id": self._id, "config": {"privacy": True}},
-        )
 
     async def async_enable_motion_detection(self) -> None:
         """Enable motion detection by arming the camera."""
