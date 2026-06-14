@@ -120,14 +120,6 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         return bool(self.status["streams"] > 0)
 
     @property
-    def motion_detection_enabled(self) -> bool:
-        """Return True if camera is armed (motion detection active)."""
-        if not self.coordinator.device.initialized:
-            return False
-
-        return bool(self.coordinator.device.config[self.key]["arm"])
-
-    @property
     def use_stream_for_stills(self) -> bool:
         """Use direct HTTP snapshot instead of stream for still images."""
         return False
@@ -237,20 +229,6 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         except aiohttp.ClientError, TimeoutError:
             return None
         return None
-
-    async def async_enable_motion_detection(self) -> None:
-        """Enable motion detection by arming the camera."""
-        await self.call_rpc(
-            "Camera.SetConfig",
-            {"id": self._id, "config": {"arm": True}},
-        )
-
-    async def async_disable_motion_detection(self) -> None:
-        """Disable motion detection by disarming the camera."""
-        await self.call_rpc(
-            "Camera.SetConfig",
-            {"id": self._id, "config": {"arm": False}},
-        )
 
 
 def _parse_sdp_ice_credentials(sdp: str) -> tuple[str, str]:
