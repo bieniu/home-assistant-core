@@ -340,6 +340,3 @@ ATTR_KEY = "key"
 ATTR_VALUE = "value"
 
 DRIVER_MISSING_ERROR = "Sensor driver missing from firmware"
-
-CAMERA_SNAPSHOT_URL = "http://{host}/camera/{camera_id}/snapshot"
-CAMERA_WHEP_URL = "http://{host}/camera/{camera_id}/whep/{stream_id}"
