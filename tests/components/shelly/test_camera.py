@@ -4,11 +4,11 @@ from collections.abc import Generator
 from copy import deepcopy
 from unittest.mock import AsyncMock, Mock, patch
 
+from aioshelly.const import MODEL_CAMERA
+from aioshelly.exceptions import RpcCallError
 import pytest
 from syrupy.assertion import SnapshotAssertion
 from webrtc_models import RTCIceCandidateInit
-
-from aioshelly.exceptions import RpcCallError
 
 from homeassistant.components.camera import (
     DATA_COMPONENT,
@@ -43,7 +43,7 @@ async def test_camera_entity_setup(
 ) -> None:
     """Test camera entity is created with correct unique_id and initial state."""
     with patch("random.SystemRandom.getrandbits", return_value=123123123123):
-        entry = await init_integration(hass, 3)
+        entry = await init_integration(hass, 3, model=MODEL_CAMERA)
 
     assert hass.states.get(CAMERA_ENTITY_ID)
     await snapshot_platform(hass, entity_registry, snapshot, entry.entry_id)
@@ -58,7 +58,7 @@ async def test_camera_state_streaming(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test camera state is streaming when streams > 0."""
-    await init_integration(hass, 3)
+    await init_integration(hass, 3, model=MODEL_CAMERA)
 
     new_status = deepcopy(mock_camera_rpc_device.status)
     new_status["camera:0"]["streams"] = 1
@@ -76,7 +76,7 @@ async def test_camera_state_recording(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test camera state is recording when recordings is set."""
-    await init_integration(hass, 3)
+    await init_integration(hass, 3, model=MODEL_CAMERA)
 
     new_status = deepcopy(mock_camera_rpc_device.status)
     new_status["camera:0"]["recordings"] = {"id": 1}
@@ -93,7 +93,7 @@ async def test_camera_image_snapshot(
     mock_camera_rpc_device: Mock,
 ) -> None:
     """Test async_camera_image fetches snapshot from the camera's HTTP endpoint."""
-    await init_integration(hass, 3)
+    await init_integration(hass, 3, model=MODEL_CAMERA)
 
     mock_camera_rpc_device.camera_get_image = AsyncMock(return_value=b"jpeg_data")
 
@@ -107,7 +107,7 @@ async def test_camera_image_snapshot_error(
     mock_camera_rpc_device: Mock,
 ) -> None:
     """Test async_camera_image returns None on HTTP error."""
-    await init_integration(hass, 3)
+    await init_integration(hass, 3, model=MODEL_CAMERA)
 
     mock_camera_rpc_device.camera_get_image = AsyncMock(return_value=None)
 
@@ -121,7 +121,7 @@ async def test_camera_webrtc_offer(
     mock_camera_rpc_device: Mock,
 ) -> None:
     """Test async_handle_async_webrtc_offer proxies SDP to Shelly's WHEP endpoint."""
-    await init_integration(hass, 3)
+    await init_integration(hass, 3, model=MODEL_CAMERA)
 
     offer_sdp = "v=0\r\na=ice-ufrag:testufrag\r\na=ice-pwd:testpwd\r\n"
     answer_sdp = "v=0\r\na=ice-ufrag:remote\r\na=ice-pwd:remotepwd\r\n"
@@ -156,7 +156,7 @@ async def test_camera_webrtc_offer_error(
     mock_camera_rpc_device: Mock,
 ) -> None:
     """Test async_handle_async_webrtc_offer sends WebRTCError on WHEP failure."""
-    await init_integration(hass, 3)
+    await init_integration(hass, 3, model=MODEL_CAMERA)
 
     mock_camera_rpc_device.camera_start_webrtc_session = AsyncMock(
         side_effect=RpcCallError(500, "WHEP endpoint returned HTTP 500")
@@ -179,7 +179,7 @@ async def test_camera_webrtc_candidate(
     mock_camera_rpc_device: Mock,
 ) -> None:
     """Test async_on_webrtc_candidate forwards candidate via device method."""
-    await init_integration(hass, 3)
+    await init_integration(hass, 3, model=MODEL_CAMERA)
 
     offer_sdp = "v=0\r\na=ice-ufrag:testufrag\r\na=ice-pwd:testpwd\r\n"
     mock_camera_rpc_device.camera_start_webrtc_session = AsyncMock(
@@ -210,7 +210,7 @@ async def test_camera_close_webrtc_session(
     mock_camera_rpc_device: Mock,
 ) -> None:
     """Test close_webrtc_session closes the session via device method."""
-    await init_integration(hass, 3)
+    await init_integration(hass, 3, model=MODEL_CAMERA)
 
     mock_camera_rpc_device.camera_start_webrtc_session = AsyncMock(
         return_value=(
@@ -242,7 +242,7 @@ async def test_camera_off_when_streamer_stopped(
     status["camera:0"]["streamer"] = "stopped"
     monkeypatch.setattr(mock_camera_rpc_device, "status", status)
 
-    await init_integration(hass, 3)
+    await init_integration(hass, 3, model=MODEL_CAMERA)
 
     camera = hass.data[DATA_COMPONENT].get_entity(CAMERA_ENTITY_ID)
     assert camera is not None
@@ -255,7 +255,7 @@ async def test_camera_properties_when_device_not_initialized(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test camera properties return safe values when the device is not initialized."""
-    await init_integration(hass, 3)
+    await init_integration(hass, 3, model=MODEL_CAMERA)
 
     camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
 
