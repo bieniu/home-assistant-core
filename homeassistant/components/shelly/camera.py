@@ -75,6 +75,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     """Shelly camera entity for RPC devices."""
 
     _attr_supported_features = CameraEntityFeature.STREAM
+    _attr_brand = "Shelly"
     entity_description: RpcCameraEntityDescription
 
     def __init__(
@@ -91,6 +92,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         Camera.__init__(self)
         self._whep_sessions: dict[str, str] = {}
         self._offer_ice_credentials: dict[str, tuple[str, str]] = {}
+        self._attr_model = self.coordinator.device.model
 
     @property
     def available(self) -> bool:

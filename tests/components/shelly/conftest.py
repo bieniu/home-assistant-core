@@ -14,7 +14,7 @@ from aioshelly.ble.const import (
     VAR_VERSION,
 )
 from aioshelly.block_device import BlockDevice, BlockUpdateType
-from aioshelly.const import MODEL_1, MODEL_25, MODEL_PLUS_2PM
+from aioshelly.const import MODEL_1, MODEL_25, MODEL_PLUS_2PM, MODEL_CAMERA
 from aioshelly.exceptions import NotInitialized
 from aioshelly.rpc_device import RpcDevice, RpcUpdateType
 import pytest
@@ -852,5 +852,6 @@ def mock_camera_rpc_device(
     monkeypatch.setattr(mock_rpc_device, "status", status)
     monkeypatch.setattr(mock_rpc_device, "ip_address", "192.168.1.37")
     monkeypatch.setattr(mock_rpc_device, "port", 80)
+    monkeypatch.setattr(mock_rpc_device, "model", MODEL_CAMERA)
 
     return mock_rpc_device
