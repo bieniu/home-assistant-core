@@ -92,7 +92,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         Camera.__init__(self)
         self._whep_sessions: dict[str, str] = {}
         self._offer_ice_credentials: dict[str, tuple[str, str]] = {}
-        self._attr_model = self.coordinator.device.model
+        self._attr_model = self.coordinator.model
 
     @property
     def available(self) -> bool:
