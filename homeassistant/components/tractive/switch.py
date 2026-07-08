@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import logging
 from typing import Any, Literal, override
 
-from aiotractive.exceptions import TractiveError
+from .aiotractive.exceptions import TractiveError
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.const import EntityCategory

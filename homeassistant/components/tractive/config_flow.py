@@ -6,7 +6,7 @@ import logging
 from typing import Any, override
 
 import aiohttp
-import aiotractive
+from . import aiotractive
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult

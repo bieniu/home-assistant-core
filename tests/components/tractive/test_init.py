@@ -3,7 +3,7 @@
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-from aiotractive.exceptions import TractiveError, UnauthorizedError
+from homeassistant.components.tractive.aiotractive.exceptions import TractiveError, UnauthorizedError
 import pytest
 
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN

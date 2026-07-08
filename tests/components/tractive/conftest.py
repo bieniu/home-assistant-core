@@ -4,8 +4,8 @@ from collections.abc import Generator
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
-from aiotractive.trackable_object import TrackableObject
-from aiotractive.tracker import Tracker
+from homeassistant.components.tractive.aiotractive.trackable_object import TrackableObject
+from homeassistant.components.tractive.aiotractive.tracker import Tracker
 import pytest
 
 from homeassistant.components.tractive.const import DOMAIN, SERVER_UNAVAILABLE

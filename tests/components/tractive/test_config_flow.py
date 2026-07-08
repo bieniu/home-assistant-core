@@ -4,7 +4,7 @@ from http import HTTPStatus
 from unittest.mock import patch
 
 import aiohttp
-import aiotractive
+import homeassistant.components.tractive.aiotractive
 
 from homeassistant import config_entries
 from homeassistant.components.tractive.const import DOMAIN
@@ -29,7 +29,7 @@ async def test_form(hass: HomeAssistant) -> None:
     assert result["errors"] is None
 
     with (
-        patch("aiotractive.api.API.user_id", return_value="user_id"),
+        patch("homeassistant.components.tractive.aiotractive.api.API.user_id", return_value="user_id"),
         patch(
             "homeassistant.components.tractive.async_setup_entry",
             return_value=True,
@@ -54,8 +54,8 @@ async def test_form_invalid_auth(hass: HomeAssistant) -> None:
     )
 
     with patch(
-        "aiotractive.api.API.user_id",
-        side_effect=aiotractive.exceptions.UnauthorizedError,
+        "homeassistant.components.tractive.aiotractive.api.API.user_id",
+        side_effect=homeassistant.components.tractive.aiotractive.exceptions.UnauthorizedError,
     ):
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -73,8 +73,8 @@ async def test_form_cannot_connect(hass: HomeAssistant) -> None:
     )
 
     with patch(
-        "aiotractive.api.API.user_id",
-        side_effect=aiotractive.exceptions.TractiveError,
+        "homeassistant.components.tractive.aiotractive.api.API.user_id",
+        side_effect=homeassistant.components.tractive.aiotractive.exceptions.TractiveError,
     ):
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -96,11 +96,11 @@ async def test_form_rate_limit_exceeded(hass: HomeAssistant) -> None:
         (),
         status=HTTPStatus.TOO_MANY_REQUESTS,
     )
-    error = aiotractive.exceptions.TractiveError()
+    error = homeassistant.components.tractive.aiotractive.exceptions.TractiveError()
     error.__cause__ = cause
 
     with patch(
-        "aiotractive.api.API.user_id",
+        "homeassistant.components.tractive.aiotractive.api.API.user_id",
         side_effect=error,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -119,7 +119,7 @@ async def test_form_unknown_error(hass: HomeAssistant) -> None:
     )
 
     with patch(
-        "aiotractive.api.API.user_id",
+        "homeassistant.components.tractive.aiotractive.api.API.user_id",
         side_effect=Exception,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -140,7 +140,7 @@ async def test_flow_entry_already_exists(hass: HomeAssistant) -> None:
     )
     first_entry.add_to_hass(hass)
 
-    with patch("aiotractive.api.API.user_id", return_value="USERID"):
+    with patch("homeassistant.components.tractive.aiotractive.api.API.user_id", return_value="USERID"):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=USER_INPUT
         )
@@ -165,7 +165,7 @@ async def test_reauthentication(hass: HomeAssistant) -> None:
     assert result["step_id"] == "reauth_confirm"
 
     with (
-        patch("aiotractive.api.API.user_id", return_value="USERID"),
+        patch("homeassistant.components.tractive.aiotractive.api.API.user_id", return_value="USERID"),
         patch(
             "homeassistant.components.tractive.async_setup_entry",
             return_value=True,
@@ -198,8 +198,8 @@ async def test_reauthentication_failure(hass: HomeAssistant) -> None:
     assert result["step_id"] == "reauth_confirm"
 
     with patch(
-        "aiotractive.api.API.user_id",
-        side_effect=aiotractive.exceptions.UnauthorizedError,
+        "homeassistant.components.tractive.aiotractive.api.API.user_id",
+        side_effect=homeassistant.components.tractive.aiotractive.exceptions.UnauthorizedError,
     ):
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -228,8 +228,8 @@ async def test_reauthentication_cannot_connect(hass: HomeAssistant) -> None:
     assert result["step_id"] == "reauth_confirm"
 
     with patch(
-        "aiotractive.api.API.user_id",
-        side_effect=aiotractive.exceptions.TractiveError,
+        "homeassistant.components.tractive.aiotractive.api.API.user_id",
+        side_effect=homeassistant.components.tractive.aiotractive.exceptions.TractiveError,
     ):
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -262,10 +262,10 @@ async def test_reauthentication_rate_limit_exceeded(hass: HomeAssistant) -> None
         (),
         status=HTTPStatus.TOO_MANY_REQUESTS,
     )
-    error = aiotractive.exceptions.TractiveError()
+    error = homeassistant.components.tractive.aiotractive.exceptions.TractiveError()
     error.__cause__ = cause
 
-    with patch("aiotractive.api.API.user_id", side_effect=error):
+    with patch("homeassistant.components.tractive.aiotractive.api.API.user_id", side_effect=error):
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             USER_INPUT,
@@ -293,7 +293,7 @@ async def test_reauthentication_unknown_failure(hass: HomeAssistant) -> None:
     assert result["step_id"] == "reauth_confirm"
 
     with patch(
-        "aiotractive.api.API.user_id",
+        "homeassistant.components.tractive.aiotractive.api.API.user_id",
         side_effect=Exception,
     ):
         result2 = await hass.config_entries.flow.async_configure(
@@ -322,7 +322,7 @@ async def test_reauthentication_failure_no_existing_entry(hass: HomeAssistant) -
     assert result["errors"] == {}
     assert result["step_id"] == "reauth_confirm"
 
-    with patch("aiotractive.api.API.user_id", return_value="USERID_DIFFERENT"):
+    with patch("homeassistant.components.tractive.aiotractive.api.API.user_id", return_value="USERID_DIFFERENT"):
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             USER_INPUT,

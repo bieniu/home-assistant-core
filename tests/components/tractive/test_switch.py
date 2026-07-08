@@ -2,7 +2,7 @@
 
 from unittest.mock import AsyncMock, patch
 
-from aiotractive.exceptions import TractiveError
+from homeassistant.components.tractive.aiotractive.exceptions import TractiveError
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
