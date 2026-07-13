@@ -18,7 +18,7 @@
   "loggers": ["aioshelly"],
   "quality_scale": "platinum",
   "requirements": [
-    "git+https://github.com/home-assistant-libs/aioshelly.git@camera#aioshelly=0.0.0"
+    "git+https://github.com/home-assistant-libs/aioshelly.git@camera#aioshelly==0.0.0"
   ],
   "zeroconf": [
     {
