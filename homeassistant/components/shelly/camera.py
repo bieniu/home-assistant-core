@@ -1,22 +1,14 @@
 """Support for Shelly cameras."""
 
 from dataclasses import dataclass
-import logging
-from typing import TYPE_CHECKING, Final
-
-import aiohttp
-from aioshelly.exceptions import RpcCallError
-from webrtc_models import RTCIceCandidateInit
+from typing import Final
 
 from homeassistant.components.camera import (
     Camera,
     CameraEntityDescription,
     CameraEntityFeature,
-    WebRTCAnswer,
-    WebRTCError,
-    WebRTCSendMessage,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import ShellyConfigEntry, ShellyRpcCoordinator
@@ -25,8 +17,6 @@ from .entity import (
     ShellyRpcAttributeEntity,
     async_setup_entry_rpc,
 )
-
-_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
@@ -90,8 +80,6 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
             self, coordinator, key, attribute, description
         )
         Camera.__init__(self)
-        self._whep_sessions: dict[str, str] = {}
-        self._offer_ice_credentials: dict[str, tuple[str, str]] = {}
         self._attr_model = self.coordinator.model
 
     @property
@@ -124,78 +112,19 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         """Use direct HTTP snapshot instead of stream for still images."""
         return False
 
-    async def async_handle_async_webrtc_offer(
-        self, offer_sdp: str, session_id: str, send_message: WebRTCSendMessage
-    ) -> None:
-        """Handle WebRTC offer by proxying to Shelly's WHEP endpoint."""
-        if TYPE_CHECKING:
-            assert self._id is not None
-
-        try:
-            (
-                answer_sdp,
-                session_url,
-                offer_ice_credentials,
-            ) = await self.coordinator.device.camera_start_webrtc_session(
-                self._id,
-                self.entity_description.stream,
-                offer_sdp,
-            )
-        except (aiohttp.ClientError, TimeoutError, RpcCallError, ValueError) as err:
-            send_message(WebRTCError("shelly_webrtc_offer_failed", str(err)))
-            return
-
-        if session_url:
-            self._whep_sessions[session_id] = session_url
-        else:
-            self._whep_sessions.pop(session_id, None)
-
-        self._offer_ice_credentials[session_id] = offer_ice_credentials
-        send_message(WebRTCAnswer(answer_sdp))
-
-    async def async_on_webrtc_candidate(
-        self, session_id: str, candidate: RTCIceCandidateInit
-    ) -> None:
-        """Forward ICE candidate to Shelly via WHEP trickle ICE."""
-        session_url = self._whep_sessions.get(session_id)
-        if not session_url or not candidate.candidate:
-            return
-        offer_ice_credentials = self._offer_ice_credentials.get(session_id, ("", ""))
-        try:
-            await self.coordinator.device.camera_send_webrtc_candidate(
-                session_url,
-                offer_ice_credentials,
-                candidate.candidate,
-                candidate.sdp_mid,
-            )
-        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
-            _LOGGER.debug("Failed to send ICE candidate to Shelly: %s", err)
-
-    @callback
-    def close_webrtc_session(self, session_id: str) -> None:
-        """Close the WHEP session on Shelly."""
-        self._offer_ice_credentials.pop(session_id, None)
-        if session_url := self._whep_sessions.pop(session_id, None):
-
-            async def _close_session() -> None:
-                try:
-                    await self.coordinator.device.camera_close_webrtc_session(
-                        session_url
-                    )
-                except (aiohttp.ClientError, TimeoutError, ValueError) as err:
-                    _LOGGER.debug("Failed to close WHEP session: %s", err)
-
-            self.hass.async_create_task(_close_session())
-        super().close_webrtc_session(session_id)
+    async def stream_source(self) -> str | None:
+        """Return the WHEP stream source URL for go2rtc."""
+        return (
+            f"whep://{self.coordinator.device.ip_address}:"
+            f"{self.coordinator.device.port}/camera/{self._id}/whep/"
+            f"{self.entity_description.stream}"
+        )
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
         """Return a still image from the camera's HTTP snapshot endpoint."""
-        if TYPE_CHECKING:
-            assert self._id is not None
-
         try:
             return await self.coordinator.device.camera_get_image(self._id)
-        except aiohttp.ClientError, TimeoutError, ValueError:
+        except TimeoutError, ValueError:
             return None

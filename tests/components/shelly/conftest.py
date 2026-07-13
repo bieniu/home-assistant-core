@@ -846,7 +846,9 @@ def mock_camera_rpc_device(
     monkeypatch: pytest.MonkeyPatch, mock_rpc_device: Mock
 ) -> Mock:
     """Set up mock RPC device with camera component data."""
-    monkeypatch.setattr(mock_rpc_device, "config", MOCK_CAMERA_CONFIG)
+    monkeypatch.setattr(
+        mock_rpc_device, "config", {**MOCK_CONFIG, **MOCK_CAMERA_CONFIG}
+    )
     monkeypatch.setattr(mock_rpc_device, "status", MOCK_CAMERA_STATUS)
 
     return mock_rpc_device
