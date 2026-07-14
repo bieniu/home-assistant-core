@@ -128,6 +128,18 @@ async def test_camera_stream_source(
     assert result == "whep://10.10.10.10:80/camera/0/whep/0"
 
 
+async def test_camera_async_create_stream_returns_none(
+    hass: HomeAssistant,
+    mock_camera_rpc_device: Mock,
+) -> None:
+    """Test async_create_stream returns None to prevent HLS stream creation."""
+    await init_integration(hass, 3, model=MODEL_CAMERA)
+
+    camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
+    result = await camera.async_create_stream()
+    assert result is None
+
+
 async def test_camera_off_when_streamer_stopped(
     hass: HomeAssistant,
     mock_camera_rpc_device: Mock,

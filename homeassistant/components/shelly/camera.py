@@ -116,9 +116,17 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         """Return the WHEP stream source URL for go2rtc."""
         return (
             f"whep://{self.coordinator.device.ip_address}:"
-            f"{self.coordinator.device.port}/camera/{self._id}/whep/"
+            f"{self.coordinator.device.port}/camera/{self._id}/whip/"
             f"{self.entity_description.stream}"
         )
+
+    async def async_create_stream(self) -> None:
+        """Return None to prevent HLS stream creation from WHEP URL.
+
+        go2rtc consumes the WHEP URL directly via stream_source().
+        """
+        return
+        # sprawdzic https://github.com/kmetabg/Shelly-NAS-hub/blob/main/shelly-webrtc/main.go
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
