@@ -205,6 +205,30 @@ async def test_camera_webrtc_candidate(
     )
 
 
+async def test_camera_stream_source(
+    hass: HomeAssistant,
+    mock_camera_rpc_device: Mock,
+) -> None:
+    """Test stream_source returns the RTSP URL for go2rtc."""
+    await init_integration(hass, 3, model=MODEL_CAMERA)
+
+    camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
+    result = await camera.stream_source()
+    assert result == "rtsp://192.168.1.37/stream/0"
+
+
+async def test_camera_stream_source_stream_1(
+    hass: HomeAssistant,
+    mock_camera_rpc_device: Mock,
+) -> None:
+    """Test stream_source returns correct RTSP URL for stream 1."""
+    await init_integration(hass, 3, model=MODEL_CAMERA)
+
+    camera = get_camera_from_entity_id(hass, "camera.test_name_stream_1")
+    result = await camera.stream_source()
+    assert result == "rtsp://192.168.1.37/stream/1"
+
+
 async def test_camera_close_webrtc_session(
     hass: HomeAssistant,
     mock_camera_rpc_device: Mock,

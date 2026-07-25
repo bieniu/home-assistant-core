@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 import logging
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, override
 
 import aiohttp
 from aioshelly.exceptions import RpcCallError
@@ -16,6 +16,7 @@ from homeassistant.components.camera import (
     WebRTCError,
     WebRTCSendMessage,
 )
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -25,6 +26,7 @@ from .entity import (
     ShellyRpcAttributeEntity,
     async_setup_entry_rpc,
 )
+from .utils import get_host
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +77,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     """Shelly camera entity for RPC devices."""
 
     _attr_supported_features = CameraEntityFeature.STREAM
+    _attr_use_stream_for_stills = False
     _attr_brand = "Shelly"
     entity_description: RpcCameraEntityDescription
 
@@ -94,6 +97,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         self._offer_ice_credentials: dict[str, tuple[str, str]] = {}
         self._attr_model = self.coordinator.model
 
+    @override
     @property
     def available(self) -> bool:
         """Available."""
@@ -101,6 +105,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
 
         return available and not self.coordinator.device.config[self.key]["privacy"]
 
+    @override
     @property
     def is_on(self) -> bool:
         """Return True if the camera is running."""
@@ -109,21 +114,19 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
 
         return bool(self.status["streamer"] == "running")
 
+    @override
     @property
     def is_recording(self) -> bool:
         """Return True if the camera is currently recording."""
         return bool(self.status.get("recordings"))
 
+    @override
     @property
     def is_streaming(self) -> bool:
         """Return True if the camera is currently streaming."""
         return bool(self.status["streams"] > 0)
 
-    @property
-    def use_stream_for_stills(self) -> bool:
-        """Use direct HTTP snapshot instead of stream for still images."""
-        return False
-
+    @override
     async def async_handle_async_webrtc_offer(
         self, offer_sdp: str, session_id: str, send_message: WebRTCSendMessage
     ) -> None:
@@ -153,6 +156,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         self._offer_ice_credentials[session_id] = offer_ice_credentials
         send_message(WebRTCAnswer(answer_sdp))
 
+    @override
     async def async_on_webrtc_candidate(
         self, session_id: str, candidate: RTCIceCandidateInit
     ) -> None:
@@ -171,6 +175,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         except (aiohttp.ClientError, TimeoutError, ValueError) as err:
             _LOGGER.debug("Failed to send ICE candidate to Shelly: %s", err)
 
+    @override
     @callback
     def close_webrtc_session(self, session_id: str) -> None:
         """Close the WHEP session on Shelly."""
@@ -188,6 +193,13 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
             self.hass.async_create_task(_close_session())
         super().close_webrtc_session(session_id)
 
+    @override
+    async def stream_source(self) -> str | None:
+        """Return the RTSP stream source for go2rtc."""
+        host = get_host(self.coordinator.config_entry.data[CONF_HOST])
+        return f"rtsp://{host}/stream/{self.entity_description.stream}"
+
+    @override
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
