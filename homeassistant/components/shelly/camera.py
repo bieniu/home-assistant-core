@@ -30,7 +30,7 @@ PARALLEL_UPDATES = 0
 class RpcCameraEntityDescription(RpcEntityDescription, CameraEntityDescription):
     """Class to describe a Shelly RPC camera entity."""
 
-    stream: int = 0
+    stream: int
 
 
 RPC_CAMERA_ENTITIES: Final = {
