@@ -71,7 +71,6 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
 
     _attr_brand = "Shelly"
     _attr_supported_features = CameraEntityFeature.STREAM
-    _attr_use_stream_for_stills = False
     entity_description: RpcCameraEntityDescription
 
     def __init__(
