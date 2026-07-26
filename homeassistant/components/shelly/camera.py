@@ -91,8 +91,9 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     def available(self) -> bool:
         """Available."""
         available = super().available
+        config = self.coordinator.device.config[self.key]
 
-        return available and not self.coordinator.device.config[self.key]["privacy"]
+        return available and not config["privacy"] and config["rtsp"]["enable"]
 
     @override
     @property

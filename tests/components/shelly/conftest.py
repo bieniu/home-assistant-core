@@ -471,6 +471,7 @@ MOCK_CAMERA_CONFIG = {
         "id": 0,
         "privacy": False,
         "arm": True,
+        "rtsp": {"enable": True},
     }
 }
 
