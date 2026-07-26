@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, override
 
 import aiohttp
+from aioshelly.exceptions import HttpCallError, InvalidAuthError
 
 from homeassistant.components.camera import (
     Camera,
@@ -131,5 +132,8 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
 
         try:
             return await self.coordinator.device.camera_get_image(self._id)
-        except aiohttp.ClientError, TimeoutError, ValueError:
+        except aiohttp.ClientError, TimeoutError, ValueError, HttpCallError:
+            return None
+        except InvalidAuthError:
+            await self.coordinator.async_shutdown_device_and_start_reauth()
             return None
