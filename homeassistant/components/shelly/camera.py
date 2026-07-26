@@ -76,9 +76,9 @@ async def async_setup_entry(
 class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     """Shelly camera entity for RPC devices."""
 
+    _attr_brand = "Shelly"
     _attr_supported_features = CameraEntityFeature.STREAM
     _attr_use_stream_for_stills = False
-    _attr_brand = "Shelly"
     entity_description: RpcCameraEntityDescription
 
     def __init__(
@@ -89,10 +89,9 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         description: RpcCameraEntityDescription,
     ) -> None:
         """Initialize Shelly camera entity."""
-        ShellyRpcAttributeEntity.__init__(
-            self, coordinator, key, attribute, description
-        )
+        super().__init__(coordinator, key, attribute, description)
         Camera.__init__(self)
+
         self._whep_sessions: dict[str, str] = {}
         self._offer_ice_credentials: dict[str, tuple[str, str]] = {}
         self._attr_model = self.coordinator.model
