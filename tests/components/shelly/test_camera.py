@@ -2,11 +2,9 @@
 
 from collections.abc import Generator
 from copy import deepcopy
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
-import aiohttp
 from aioshelly.const import MODEL_CAMERA
-from aioshelly.exceptions import HttpCallError, InvalidAuthError
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
@@ -86,61 +84,15 @@ async def test_camera_state_recording(
     assert state.state == CameraState.RECORDING
 
 
-async def test_camera_image_snapshot(
+async def test_camera_use_stream_for_stills(
     hass: HomeAssistant,
     mock_camera_rpc_device: Mock,
 ) -> None:
-    """Test async_camera_image fetches snapshot from the camera's HTTP endpoint."""
+    """Test use_stream_for_stills returns True (still images from the RTSP stream)."""
     await init_integration(hass, 3, model=MODEL_CAMERA)
 
-    mock_camera_rpc_device.camera_get_image = AsyncMock(return_value=b"jpeg_data")
-
     camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
-    result = await camera.async_camera_image()
-    assert result == b"jpeg_data"
-
-
-@pytest.mark.parametrize(
-    "side_effect",
-    [
-        pytest.param(aiohttp.ClientError(), id="aiohttp_client_error"),
-        pytest.param(TimeoutError(), id="timeout_error"),
-        pytest.param(ValueError("aiohttp_session required"), id="value_error"),
-        pytest.param(HttpCallError(503, "Service Unavailable"), id="http_call_error"),
-    ],
-)
-async def test_camera_image_snapshot_returns_none_on_error(
-    hass: HomeAssistant,
-    mock_camera_rpc_device: Mock,
-    side_effect: Exception,
-) -> None:
-    """Test async_camera_image returns None on transient errors."""
-    await init_integration(hass, 3, model=MODEL_CAMERA)
-
-    mock_camera_rpc_device.camera_get_image = AsyncMock(side_effect=side_effect)
-
-    camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
-    result = await camera.async_camera_image()
-    assert result is None
-
-
-async def test_camera_image_snapshot_invalid_auth(
-    hass: HomeAssistant,
-    mock_camera_rpc_device: Mock,
-) -> None:
-    """Test async_camera_image triggers reauth on InvalidAuthError."""
-    await init_integration(hass, 3, model=MODEL_CAMERA)
-
-    mock_camera_rpc_device.camera_get_image = AsyncMock(side_effect=InvalidAuthError)
-
-    camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
-    coordinator = camera.coordinator  # type: ignore[attr-defined]
-    with patch.object(
-        coordinator, "async_shutdown_device_and_start_reauth"
-    ) as mock_reauth:
-        result = await camera.async_camera_image()
-        assert result is None
-        mock_reauth.assert_awaited_once()
+    assert camera.use_stream_for_stills is True
 
 
 async def test_camera_stream_source(

@@ -1,10 +1,7 @@
 """Support for Shelly cameras."""
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final, override
-
-import aiohttp
-from aioshelly.exceptions import HttpCallError, InvalidAuthError
+from typing import Final, override
 
 from homeassistant.components.camera import (
     Camera,
@@ -123,17 +120,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         return f"rtsp://{host}/stream/{self.entity_description.stream}"
 
     @override
-    async def async_camera_image(
-        self, width: int | None = None, height: int | None = None
-    ) -> bytes | None:
-        """Return a still image from the camera's HTTP snapshot endpoint."""
-        if TYPE_CHECKING:
-            assert self._id is not None
-
-        try:
-            return await self.coordinator.device.camera_get_image(self._id)
-        except aiohttp.ClientError, TimeoutError, ValueError, HttpCallError:
-            return None
-        except InvalidAuthError:
-            await self.coordinator.async_shutdown_device_and_start_reauth()
-            return None
+    @property
+    def use_stream_for_stills(self) -> bool:
+        """Use the RTSP stream to generate still images."""
+        return True
