@@ -120,6 +120,29 @@
       }
     }
   },
+  "device": {
+    "channel": {
+      "name": "{device_name} Channel {id}"
+    },
+    "cover": {
+      "name": "{device_name} Cover {id}"
+    },
+    "energy_meter": {
+      "name": "{device_name} Energy Meter {id}"
+    },
+    "light": {
+      "name": "{device_name} Light {id}"
+    },
+    "light_type": {
+      "name": "{device_name} {light_type} light {id}"
+    },
+    "output": {
+      "name": "{device_name} Output {id}"
+    },
+    "phase": {
+      "name": "{device_name} Phase {phase}"
+    }
+  },
   "device_automation": {
     "trigger_subtype": {
       "button": "Button",

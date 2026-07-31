@@ -133,18 +133,12 @@ def get_block_channel(block: Block | None, base: str = "1") -> str:
     return chr(int(block.channel) + ord(base))
 
 
-def get_block_sub_device_name(device: BlockDevice, block: Block) -> str:
-    """Get name of block sub-device."""
+def get_block_sub_device_name(device: BlockDevice, block: Block) -> str | None:
+    """Get custom name of a block sub-device, if set."""
     if TYPE_CHECKING:
         assert block.channel
 
-    if custom_name := get_block_custom_name(device, block):
-        return custom_name
-
-    if device.settings["device"]["type"] == MODEL_EM3:
-        return f"{device.name} Phase {get_block_channel(block, 'A')}"
-
-    return f"{device.name} Channel {get_block_channel(block)}"
+    return get_block_custom_name(device, block)
 
 
 def is_block_momentary_input(
@@ -400,10 +394,8 @@ def get_rpc_key_normalized(key: str) -> str:
     return key.replace("emdata", "em")
 
 
-def get_rpc_sub_device_name(
-    device: RpcDevice, key: str, emeter_phase: str | None = None
-) -> str:
-    """Get name based on device and channel name."""
+def get_rpc_sub_device_name(device: RpcDevice, key: str) -> str | None:
+    """Get custom name of an RPC sub-device, if set."""
     if key in device.config and key != "em:0":
         # workaround for Pro 3EM, we don't want to get name for em:0
         if (zone_id := get_irrigation_zone_id(device, key)) is not None:
@@ -414,18 +406,20 @@ def get_rpc_sub_device_name(
         if entity_name := device.config[key].get("name"):
             return cast(str, entity_name)
 
-    _, component, component_id = get_rpc_key(get_rpc_key_normalized(key))
+    return None
 
+
+def get_rpc_sub_device_translation_key(component: str) -> str | None:
+    """Return the device translation key for an RPC sub-device component."""
     if component in ("cct", "rgb", "rgbw"):
-        return f"{device.name} {component.upper()} light {component_id}"
-    if component == "em1":
-        return f"{device.name} Energy Meter {component_id}"
-    if component == "em" and emeter_phase is not None:
-        return f"{device.name} Phase {emeter_phase}"
-    if component == "switch":
-        return f"{device.name} Output {component_id}"
-
-    return f"{device.name} {component.title()} {component_id}"
+        return "light_type"
+    return {
+        "cover": "cover",
+        "em1": "energy_meter",
+        "em": "phase",
+        "light": "light",
+        "switch": "output",
+    }.get(component)
 
 
 def get_device_entry_gen(entry: ConfigEntry) -> int:
@@ -799,21 +793,16 @@ def get_rpc_device_info(
         return DeviceInfo(connections={(CONNECTION_NETWORK_MAC, mac)})
 
     key = get_rpc_key_normalized(key)
-    has_id, component, _ = get_rpc_key(key)
+    has_id, component, component_id = get_rpc_key(key)
 
     if emeter_phase is not None:
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"{mac}-{key}-{emeter_phase.lower()}")},
-            name=get_rpc_sub_device_name(device, key, emeter_phase),
-            manufacturer="Shelly",
-            model=model_name,
-            model_id=model,
-            suggested_area=suggested_area,
-            via_device=(DOMAIN, mac),
-            configuration_url=configuration_url,
-        )
-
-    if (
+        identifiers = {(DOMAIN, f"{mac}-{key}-{emeter_phase.lower()}")}
+        translation_key: str | None = "phase"
+        translation_placeholders: dict[str, str] | None = {
+            "device_name": device.name,
+            "phase": emeter_phase,
+        }
+    elif (
         (
             component not in (*All_LIGHT_TYPES, "cover", "em1", "switch")
             and get_irrigation_zone_id(device, key) is None
@@ -822,10 +811,22 @@ def get_rpc_device_info(
         or get_rpc_number_of_channels(device, component) < 2
     ):
         return DeviceInfo(connections={(CONNECTION_NETWORK_MAC, mac)})
+    else:
+        identifiers = {(DOMAIN, f"{mac}-{key}")}
+        translation_key = get_rpc_sub_device_translation_key(component)
+        translation_placeholders = {"device_name": device.name, "id": component_id}
+        if component in ("cct", "rgb", "rgbw"):
+            translation_placeholders["light_type"] = component.upper()
+
+    if (name := get_rpc_sub_device_name(device, key)) is not None:
+        translation_key = None
+        translation_placeholders = None
 
     return DeviceInfo(
-        identifiers={(DOMAIN, f"{mac}-{key}")},
-        name=get_rpc_sub_device_name(device, key),
+        identifiers=identifiers,
+        name=name,
+        translation_key=translation_key,
+        translation_placeholders=translation_placeholders,
         manufacturer="Shelly",
         model=model_name,
         model_id=model,
@@ -879,9 +880,28 @@ def get_block_device_info(
     if TYPE_CHECKING:
         assert block
 
+    if device.settings["device"]["type"] == MODEL_EM3:
+        translation_key: str | None = "phase"
+        translation_placeholders: dict[str, str] | None = {
+            "device_name": device.name,
+            "phase": get_block_channel(block, "A"),
+        }
+    else:
+        translation_key = "channel"
+        translation_placeholders = {
+            "device_name": device.name,
+            "id": get_block_channel(block),
+        }
+
+    if (name := get_block_sub_device_name(device, block)) is not None:
+        translation_key = None
+        translation_placeholders = None
+
     return DeviceInfo(
         identifiers={(DOMAIN, f"{mac}-{block.description}")},
-        name=get_block_sub_device_name(device, block),
+        name=name,
+        translation_key=translation_key,
+        translation_placeholders=translation_placeholders,
         manufacturer="Shelly",
         model=model_name,
         model_id=model,
