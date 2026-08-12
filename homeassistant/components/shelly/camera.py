@@ -8,7 +8,7 @@ from homeassistant.components.camera import (
     CameraEntityDescription,
     CameraEntityFeature,
 )
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -116,7 +116,13 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     @override
     async def stream_source(self) -> str | None:
         """Return the RTSP stream source for go2rtc."""
+        username = self.coordinator.config_entry.data.get(CONF_USERNAME)
+        password = self.coordinator.config_entry.data.get(CONF_PASSWORD)
         host = get_host(self.coordinator.config_entry.data[CONF_HOST])
+
+        if username and password:
+            return f"rtsp://{username}:{password}@{host}/stream/{self.entity_description.stream}"
+
         return f"rtsp://{host}/stream/{self.entity_description.stream}"
 
     @override
