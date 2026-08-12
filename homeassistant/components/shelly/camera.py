@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Final, override
+from urllib.parse import quote
 
 from homeassistant.components.camera import (
     Camera,
@@ -121,7 +122,10 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         host = get_host(self.coordinator.config_entry.data[CONF_HOST])
 
         if username and password:
-            return f"rtsp://{username}:{password}@{host}/stream/{self.entity_description.stream}"
+            return (
+                f"rtsp://{quote(username)}:{quote(password)}@{host}"
+                f"/stream/{self.entity_description.stream}"
+            )
 
         return f"rtsp://{host}/stream/{self.entity_description.stream}"
 
