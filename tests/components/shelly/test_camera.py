@@ -13,7 +13,14 @@ from homeassistant.components.camera import (
     CameraState,
     get_camera_from_entity_id,
 )
-from homeassistant.const import Platform
+from homeassistant.components.shelly.const import CONF_SLEEP_PERIOD
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_MODEL,
+    CONF_PASSWORD,
+    CONF_USERNAME,
+    Platform,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_registry import EntityRegistry
 
@@ -117,6 +124,38 @@ async def test_camera_stream_source_stream_1(
     camera = get_camera_from_entity_id(hass, "camera.test_name_stream_1")
     result = await camera.stream_source()
     assert result == "rtsp://192.168.1.37/stream/1"
+
+
+@pytest.mark.parametrize(
+    ("password", "expected_password"),
+    [
+        ("password", "password"),
+        ("pass:word@1", "pass%3Aword%401"),
+    ],
+)
+async def test_camera_stream_source_with_credentials(
+    hass: HomeAssistant,
+    mock_camera_rpc_device: Mock,
+    password: str,
+    expected_password: str,
+) -> None:
+    """Test stream_source returns the RTSP URL with credentials for go2rtc."""
+    await init_integration(
+        hass,
+        3,
+        model=MODEL_CAMERA,
+        data={
+            CONF_HOST: "192.168.1.37",
+            CONF_MODEL: MODEL_CAMERA,
+            CONF_PASSWORD: password,
+            CONF_SLEEP_PERIOD: 0,
+            CONF_USERNAME: "admin",
+        },
+    )
+
+    camera = get_camera_from_entity_id(hass, CAMERA_ENTITY_ID)
+    result = await camera.stream_source()
+    assert result == f"rtsp://admin:{expected_password}@192.168.1.37/stream/0"
 
 
 async def test_camera_off_when_streamer_stopped(
