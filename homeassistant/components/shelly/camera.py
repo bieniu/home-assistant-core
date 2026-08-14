@@ -1,7 +1,7 @@
 """Support for Shelly cameras."""
 
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, override
 
 from homeassistant.components.camera import (
     Camera,
@@ -82,6 +82,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         Camera.__init__(self)
         self._attr_model = self.coordinator.model
 
+    @override
     @property
     def available(self) -> bool:
         """Available."""
@@ -89,6 +90,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
 
         return available and not self.coordinator.device.config[self.key]["privacy"]
 
+    @override
     @property
     def is_on(self) -> bool:
         """Return True if the camera is running."""
@@ -97,26 +99,30 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
 
         return bool(self.status["streamer"] == "running")
 
+    @override
     @property
     def is_recording(self) -> bool:
         """Return True if the camera is currently recording."""
         return bool(self.status.get("recordings"))
 
+    @override
     @property
     def is_streaming(self) -> bool:
         """Return True if the camera is currently streaming."""
         return bool(self.status["streams"] > 0)
 
+    @override
     @property
     def use_stream_for_stills(self) -> bool:
         """Use direct HTTP snapshot instead of stream for still images."""
         return False
 
+    @override
     async def stream_source(self) -> str | None:
         """Return the WHEP stream source URL for go2rtc."""
         return (
             f"whep://{self.coordinator.device.ip_address}:"
-            f"{self.coordinator.device.port}/camera/{self._id}/whip/"
+            f"{self.coordinator.device.port}/camera/{self._id}/whep/"
             f"{self.entity_description.stream}"
         )
 
@@ -126,7 +132,7 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         go2rtc consumes the WHEP URL directly via stream_source().
         """
         return
-        # sprawdzic https://github.com/kmetabg/Shelly-NAS-hub/blob/main/shelly-webrtc/main.go
+        # TODO check https://github.com/kmetabg/Shelly-NAS-hub/blob/main/shelly-webrtc/main.go
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
