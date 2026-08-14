@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 import logging
 from typing import TYPE_CHECKING, Final, override
+from urllib.parse import quote
 
 import aiohttp
 from aioshelly.exceptions import RpcCallError
@@ -16,7 +17,7 @@ from homeassistant.components.camera import (
     WebRTCError,
     WebRTCSendMessage,
 )
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -52,6 +53,7 @@ RPC_CAMERA_ENTITIES: Final = {
         stream=1,
         translation_key="stream",
         translation_placeholders={"stream_id": "1"},
+        entity_registry_enabled_default=False,
     ),
 }
 
@@ -64,6 +66,7 @@ async def async_setup_entry(
     """Set up Shelly camera entities."""
     if not config_entry.runtime_data.rpc:
         return
+
     async_setup_entry_rpc(
         hass,
         config_entry,
@@ -76,9 +79,8 @@ async def async_setup_entry(
 class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     """Shelly camera entity for RPC devices."""
 
-    _attr_supported_features = CameraEntityFeature.STREAM
-    _attr_use_stream_for_stills = False
     _attr_brand = "Shelly"
+    _attr_supported_features = CameraEntityFeature.STREAM
     entity_description: RpcCameraEntityDescription
 
     def __init__(
@@ -89,10 +91,9 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
         description: RpcCameraEntityDescription,
     ) -> None:
         """Initialize Shelly camera entity."""
-        ShellyRpcAttributeEntity.__init__(
-            self, coordinator, key, attribute, description
-        )
+        super().__init__(coordinator, key, attribute, description)
         Camera.__init__(self)
+
         self._whep_sessions: dict[str, str] = {}
         self._offer_ice_credentials: dict[str, tuple[str, str]] = {}
         self._attr_model = self.coordinator.model
@@ -102,8 +103,11 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     def available(self) -> bool:
         """Available."""
         available = super().available
+        if not available:
+            return False
 
-        return available and not self.coordinator.device.config[self.key]["privacy"]
+        config = self.coordinator.device.config[self.key]
+        return not config["privacy"] and config["rtsp"]["enable"]
 
     @override
     @property
@@ -196,7 +200,16 @@ class ShellyCameraEntity(ShellyRpcAttributeEntity, Camera):
     @override
     async def stream_source(self) -> str | None:
         """Return the RTSP stream source for go2rtc."""
+        username = self.coordinator.config_entry.data.get(CONF_USERNAME)
+        password = self.coordinator.config_entry.data.get(CONF_PASSWORD)
         host = get_host(self.coordinator.config_entry.data[CONF_HOST])
+
+        if username and password:
+            return (
+                f"rtsp://{quote(username, safe='')}:{quote(password, safe='')}@{host}"
+                f"/stream/{self.entity_description.stream}"
+            )
+
         return f"rtsp://{host}/stream/{self.entity_description.stream}"
 
     @override
