@@ -446,7 +446,7 @@ class ShellyConfigFlow(ConfigFlow, domain=DOMAIN):
         """
         self.info = await self._async_get_info(host, port, verify_ssl)
         await self.async_set_unique_id(self.info[CONF_MAC], raise_on_progress=False)
-        self._abort_if_unique_id_configured({CONF_HOST: host})
+        self._abort_if_unique_id_configured({CONF_HOST: host}, reload_on_update=False)
 
         self.host = host
         self.port = self._check_enhanced_security(self.info, port)
@@ -510,7 +510,7 @@ class ShellyConfigFlow(ConfigFlow, domain=DOMAIN):
             self.ble_device = device_data.ble_device
             self.device_name = device_data.name
             await self.async_set_unique_id(device_data.mac, raise_on_progress=False)
-            self._abort_if_unique_id_configured()
+            self._abort_if_unique_id_configured(reload_on_update=False)
             self.context.update(
                 {
                     "title_placeholders": {"name": self.device_name},
@@ -739,9 +739,11 @@ class ShellyConfigFlow(ConfigFlow, domain=DOMAIN):
             # This is a workaround for a bug in the firmware 0.12 (and older?)
             # which should be removed once the firmware is fixed
             # and the old version is no longer in use
-            self._abort_if_unique_id_configured()
+            self._abort_if_unique_id_configured(reload_on_update=False)
         else:
-            self._abort_if_unique_id_configured({CONF_HOST: host})
+            self._abort_if_unique_id_configured(
+                {CONF_HOST: host}, reload_on_update=False
+            )
 
     @override
     async def async_step_bluetooth(
@@ -771,7 +773,7 @@ class ShellyConfigFlow(ConfigFlow, domain=DOMAIN):
 
         # Check if already configured - abort if device is already set up
         await self.async_set_unique_id(mac)
-        self._abort_if_unique_id_configured()
+        self._abort_if_unique_id_configured(reload_on_update=False)
 
         # Store BLE device and name for WiFi provisioning
         self.ble_device = async_ble_device_from_address(
@@ -1290,9 +1292,7 @@ class ShellyConfigFlow(ConfigFlow, domain=DOMAIN):
             data_updates: dict[str, Any] = {CONF_PORT: port, **user_input}
             data_updates.update(self._get_ssl_entry_data(port, verify_ssl))
 
-            return self.async_update_reload_and_abort(
-                reauth_entry, data_updates=data_updates
-            )
+            return self.async_update_and_abort(reauth_entry, data_updates=data_updates)
 
         if get_device_entry_gen(reauth_entry) in BLOCK_GENERATIONS:
             schema = {
@@ -1344,7 +1344,7 @@ class ShellyConfigFlow(ConfigFlow, domain=DOMAIN):
                 ):
                     data_updates[CONF_VERIFY_SSL] = verify_ssl
 
-                return self.async_update_reload_and_abort(
+                return self.async_update_and_abort(
                     reconfigure_entry,
                     data_updates=data_updates,
                 )
