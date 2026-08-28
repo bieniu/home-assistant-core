@@ -8173,6 +8173,12 @@
       "config_flow": true,
       "iot_class": "local_push"
     },
+    "westinghouse_infrared": {
+      "name": "Westinghouse Infrared",
+      "integration_type": "device",
+      "config_flow": true,
+      "iot_class": "assumed_state"
+    },
     "whirlpool": {
       "name": "Whirlpool Appliances",
       "integration_type": "hub",

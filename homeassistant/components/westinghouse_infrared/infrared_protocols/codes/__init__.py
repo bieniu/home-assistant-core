@@ -1,0 +1,1 @@
+"""Westinghouse infrared protocol codes."""

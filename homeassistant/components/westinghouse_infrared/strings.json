@@ -1,0 +1,27 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "This device has already been configured with this transmitter.",
+      "no_emitters": "No infrared transmitter entities found. Please set up an infrared device first."
+    },
+    "step": {
+      "user": {
+        "data": {
+          "infrared_emitter_entity_id": "Infrared transmitter"
+        },
+        "data_description": {
+          "infrared_emitter_entity_id": "The infrared transmitter entity to use for sending commands."
+        },
+        "description": "Select the infrared transmitter entity to use for controlling your Westinghouse fan.",
+        "title": "Set up Westinghouse Infrared Remote"
+      }
+    }
+  },
+  "entity": {
+    "fan": {
+      "fan": {
+        "name": "Westinghouse Fan"
+      }
+    }
+  }
+}

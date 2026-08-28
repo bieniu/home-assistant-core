@@ -888,6 +888,7 @@ FLOWS = {
         "webostv",
         "weheat",
         "wemo",
+        "westinghouse_infrared",
         "whirlpool",
         "whois",
         "wiffi",

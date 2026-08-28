@@ -1,0 +1,11 @@
+{
+  "domain": "westinghouse_infrared",
+  "name": "Westinghouse Infrared",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": ["infrared"],
+  "documentation": "https://www.home-assistant.io/integrations/westinghouse_infrared",
+  "integration_type": "device",
+  "iot_class": "assumed_state",
+  "quality_scale": "bronze"
+}
