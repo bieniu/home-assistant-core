@@ -1,6 +1,7 @@
 """Common fixtures for the Westinghouse Infrared tests."""
 
 from collections.abc import Generator
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -8,6 +9,7 @@ import pytest
 from homeassistant.components.westinghouse_infrared import PLATFORMS
 from homeassistant.components.westinghouse_infrared.const import (
     CONF_INFRARED_EMITTER_ENTITY_ID,
+    CONF_INFRARED_RECEIVER_ENTITY_ID,
     DOMAIN,
 )
 from homeassistant.const import Platform
@@ -15,20 +17,39 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from tests.common import MockConfigEntry
-from tests.components.infrared import EMITTER_ENTITY_ID as MOCK_INFRARED_ENTITY_ID
+from tests.components.infrared import (
+    EMITTER_ENTITY_ID as MOCK_INFRARED_EMITTER_ENTITY_ID,
+    RECEIVER_ENTITY_ID as MOCK_INFRARED_RECEIVER_ENTITY_ID,
+)
+from tests.components.infrared.common import (
+    MockInfraredEmitterEntity,
+    MockInfraredReceiverEntity,
+)
 
 ENTRY_ID = "01JTEST0000000000000000000"
 
 
 @pytest.fixture
-def mock_config_entry() -> MockConfigEntry:
+def has_receiver() -> bool:
+    """Return whether the config entry has an infrared receiver configured."""
+    return False
+
+
+@pytest.fixture
+def mock_config_entry(has_receiver: bool) -> MockConfigEntry:
     """Return a mock config entry for the Westinghouse fan."""
+    data: dict[str, Any] = {
+        CONF_INFRARED_EMITTER_ENTITY_ID: MOCK_INFRARED_EMITTER_ENTITY_ID,
+    }
+    if has_receiver:
+        data[CONF_INFRARED_RECEIVER_ENTITY_ID] = MOCK_INFRARED_RECEIVER_ENTITY_ID
+
     return MockConfigEntry(
         domain=DOMAIN,
         entry_id=ENTRY_ID,
         title="Westinghouse Fan via Test IR emitter",
-        data={CONF_INFRARED_EMITTER_ENTITY_ID: MOCK_INFRARED_ENTITY_ID},
-        unique_id=f"fan_{MOCK_INFRARED_ENTITY_ID}",
+        data=data,
+        unique_id=f"fan_{MOCK_INFRARED_EMITTER_ENTITY_ID}",
     )
 
 
@@ -57,7 +78,8 @@ def mock_westinghouse_code_to_command() -> Generator[None]:
 async def init_integration(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
-    mock_infrared_emitter_entity,
+    mock_infrared_emitter_entity: MockInfraredEmitterEntity,
+    mock_infrared_receiver_entity: MockInfraredReceiverEntity,
     mock_westinghouse_code_to_command: None,
     platforms: list[Platform],
 ) -> MockConfigEntry:
