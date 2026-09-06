@@ -371,3 +371,62 @@ class WestinghouseFanCode(IntEnum):
             WestinghouseFanCode.SPEED_3: _SPEED_3_TIMINGS,
         }[self]
         return WestinghouseFanCommand(raw_timings=timings, repeat_count=repeat_count)
+
+    @classmethod
+    def from_raw_timings(
+        cls, timings: list[int], *, tolerance: int = 300
+    ) -> WestinghouseFanCode | None:
+        """Decode a Westinghouse fan code from received IR timings.
+
+        Extracts the first frame (up to the first inter-frame gap) and
+        compares it element-by-element against each known reference frame
+        using *tolerance* microseconds of leeway per element.
+        """
+        frame = _extract_first_frame(timings)
+        if frame is None:
+            return None
+
+        for code, ref in _FIRST_FRAMES.items():
+            if len(frame) != len(ref):
+                continue
+            if all(
+                abs(actual - ref_val) <= tolerance
+                for actual, ref_val in zip(frame, ref, strict=True)
+            ):
+                return code
+        return None
+
+
+def _extract_first_frame(
+    timings: list[int], *, gap_threshold: int = 5000
+) -> list[int] | None:
+    """Extract the first frame from a sequence of IR timings.
+
+    A frame ends at the first inter-frame gap whose absolute value exceeds
+    *gap_threshold* microseconds. The gap itself is included in the result
+    so the frame length matches the reference arrays.
+    """
+    for idx, val in enumerate(timings):
+        if val < -gap_threshold:
+            return list(timings[: idx + 1])
+    # No gap found — treat the entire list as a single frame.
+    return list(timings) if timings else None
+
+
+_FIRST_FRAMES: dict[WestinghouseFanCode, list[int]] = {}
+
+
+def _build_first_frames() -> None:
+    """Populate the first-frame lookup table from the reference timings."""
+    for code, timings in (
+        (WestinghouseFanCode.TURN_OFF, _TURN_OFF_TIMINGS),
+        (WestinghouseFanCode.SPEED_1, _SPEED_1_TIMINGS),
+        (WestinghouseFanCode.SPEED_2, _SPEED_2_TIMINGS),
+        (WestinghouseFanCode.SPEED_3, _SPEED_3_TIMINGS),
+    ):
+        frame = _extract_first_frame(timings)
+        if frame is not None:
+            _FIRST_FRAMES[code] = frame
+
+
+_build_first_frames()

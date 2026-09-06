@@ -5,12 +5,19 @@ from typing import Any, override
 import voluptuous as vol
 
 from homeassistant.components import infrared
-from homeassistant.components.infrared import DOMAIN as INFRARED_DOMAIN
+from homeassistant.components.infrared import (
+    DOMAIN as INFRARED_DOMAIN,
+    async_get_receivers,
+)
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import EntitySelector, EntitySelectorConfig
 
-from .const import CONF_INFRARED_EMITTER_ENTITY_ID, DOMAIN
+from .const import (
+    CONF_INFRARED_EMITTER_ENTITY_ID,
+    CONF_INFRARED_RECEIVER_ENTITY_ID,
+    DOMAIN,
+)
 
 
 class WestinghouseIrConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -28,11 +35,19 @@ class WestinghouseIrConfigFlow(ConfigFlow, domain=DOMAIN):
         if not emitter_entity_ids:
             return self.async_abort(reason="no_emitters")
 
+        receiver_entity_ids = async_get_receivers(self.hass)
+
         if user_input is not None:
             entity_id = user_input[CONF_INFRARED_EMITTER_ENTITY_ID]
 
             await self.async_set_unique_id(f"fan_{entity_id}")
             self._abort_if_unique_id_configured()
+
+            receiver_id = user_input.get(CONF_INFRARED_RECEIVER_ENTITY_ID)
+            if receiver_id:
+                self._async_abort_entries_match(
+                    {CONF_INFRARED_RECEIVER_ENTITY_ID: receiver_id}
+                )
 
             ent_reg = er.async_get(self.hass)
             entry = ent_reg.async_get(entity_id)
@@ -52,7 +67,13 @@ class WestinghouseIrConfigFlow(ConfigFlow, domain=DOMAIN):
                             domain=INFRARED_DOMAIN,
                             include_entities=emitter_entity_ids,
                         )
-                    )
+                    ),
+                    vol.Optional(CONF_INFRARED_RECEIVER_ENTITY_ID): EntitySelector(
+                        EntitySelectorConfig(
+                            domain=INFRARED_DOMAIN,
+                            include_entities=receiver_entity_ids,
+                        )
+                    ),
                 }
             ),
         )
