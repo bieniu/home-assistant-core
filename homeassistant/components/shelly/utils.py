@@ -59,6 +59,7 @@ from .const import (
     DEVICE_UNIT_MAP,
     DEVICES_WITHOUT_FIRMWARE_CHANGELOG,
     DOMAIN,
+    DYNAMIC_COMPONENTS_MAP,
     FIRMWARE_UNSUPPORTED_ISSUE_ID,
     GEN1_RELEASE_URL,
     GEN2_BETA_RELEASE_URL,
@@ -75,7 +76,6 @@ from .const import (
     SHELLY_WALL_DISPLAY_MODEL_PREFIX,
     SHIX3_1_INPUTS_EVENTS_TYPES,
     VIRTUAL_COMPONENTS,
-    VIRTUAL_COMPONENTS_MAP,
     WALL_DISPLAY_RELEASE_URL,
     All_LIGHT_TYPES,
 )
@@ -637,7 +637,7 @@ def async_remove_shelly_rpc_entities(
 
 def get_virtual_component_ids(config: dict[str, Any], platform: str) -> list[str]:
     """Return a list of virtual component IDs for a platform."""
-    component = VIRTUAL_COMPONENTS_MAP[platform]
+    component = DYNAMIC_COMPONENTS_MAP[platform]
 
     ids: list[str] = []
 
@@ -656,7 +656,7 @@ def get_virtual_component_ids(config: dict[str, Any], platform: str) -> list[str
 
 def is_view_for_platform(config: dict[str, Any], key: str, platform: str) -> bool:
     """Return true if the virtual component view match the platform."""
-    component = VIRTUAL_COMPONENTS_MAP[platform]
+    component = DYNAMIC_COMPONENTS_MAP[platform]
     view = config[key]["meta"]["ui"]["view"]
     return view in component["modes"]
 
