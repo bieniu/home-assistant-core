@@ -862,7 +862,7 @@ MOCK_STORAGE_ITEMS = [
         "ts": 1750000000.0,
         "duration": 12,
         "size": 123456,
-        "url": "http://192.168.1.37/storage/0/aaaa1111/MOV_0001.mp4",
+        "url": "/storage/0/aaaa1111/MOV_0001.mp4",
         "thumbnail_url": "http://192.168.1.37/storage/0/aaaa1111/thumb_0001.jpg",
         "trigger": {
             "component": "camerazone:200",

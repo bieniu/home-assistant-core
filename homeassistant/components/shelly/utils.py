@@ -6,12 +6,14 @@ from typing import TYPE_CHECKING, Any, cast
 
 from aiohttp.web import Request, WebSocketResponse
 from aioshelly.block_device import COAP, Block, BlockDevice
+from aioshelly.common import use_ssl
 from aioshelly.const import (
     BLOCK_GENERATIONS,
     BLU_TRV_IDENTIFIER,
     BLU_TRV_MODEL_NAME,
     DEFAULT_COAP_PORT,
     DEFAULT_HTTP_PORT,
+    DEFAULT_HTTPS_PORT,
     MODEL_1L,
     MODEL_BLU_GATEWAY_G3,
     MODEL_DIMMER,
@@ -621,6 +623,32 @@ def get_host(host: str) -> str:
         return f"[{host}]"
 
     return host
+
+
+def get_device_url(data: Mapping[str, Any]) -> str:
+    """Get the base URL of the device from config entry data."""
+    host = get_host(data[CONF_HOST])
+    port = get_http_port(data)
+    scheme = "https" if use_ssl(port) else "http"
+
+    if port in (DEFAULT_HTTP_PORT, DEFAULT_HTTPS_PORT):
+        return f"{scheme}://{host}"
+
+    return f"{scheme}://{host}:{port}"
+
+
+def get_absolute_url(url: str | None, base_url: str) -> str | None:
+    """Get absolute URL for a URL reported by the device."""
+    if not url:
+        return None
+
+    if url.startswith(("http://", "https://")):
+        return url
+
+    if url.startswith("/"):
+        return f"{base_url}{url}"
+
+    return None
 
 
 @callback
