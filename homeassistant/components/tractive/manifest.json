@@ -7,5 +7,7 @@
   "integration_type": "device",
   "iot_class": "cloud_push",
   "loggers": ["aiotractive"],
-  "requirements": ["aiotractive==1.0.3"]
+  "requirements": [
+    "git+https://github.com/zhulik/aiotractive.git@dataupdatrecoordinator-preparation"
+  ]
 }
