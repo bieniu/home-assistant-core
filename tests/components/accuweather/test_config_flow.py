@@ -139,6 +139,7 @@ async def test_create_entry(
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["result"].unique_id == "0123456"
     assert result["title"] == "Test location"
     assert result["data"][CONF_LATITUDE] == 55.55
     assert result["data"][CONF_LONGITUDE] == 122.12
