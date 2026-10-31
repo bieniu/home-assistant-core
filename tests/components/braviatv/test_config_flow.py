@@ -551,6 +551,7 @@ async def test_user_flow_with_empty_cid(
     )
 
     assert result["type"] is expected_type
+    # Setting up the domain for the new entry migrates the enabled existing entry too
     assert (
         sorted(entry.unique_id for entry in hass.config_entries.async_entries(DOMAIN))
         == expected_unique_ids

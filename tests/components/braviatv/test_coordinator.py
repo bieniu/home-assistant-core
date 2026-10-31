@@ -63,6 +63,7 @@ async def test_connect_with_pin(
         domain=DOMAIN,
         title="BRAVIA TV-Model",
         unique_id="very_unique_string",
+        minor_version=2,
         data={
             CONF_HOST: "bravia-host",
             CONF_MAC: "AA:BB:CC:DD:EE:FF",
@@ -143,7 +144,7 @@ async def test_api_reloading(
     mock_config_entry: MockConfigEntry,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """Test updates are skipped while the API service reloads, then fail."""
+    """Test updates are skipped while the API service reloads, then fail and recover."""
     await init_integration(hass, mock_config_entry)
     mock_braviatv_client.get_power_status.side_effect = BraviaNotFound
 
@@ -167,6 +168,16 @@ async def test_api_reloading(
     assert state.state == STATE_UNAVAILABLE
 
     mock_braviatv_client.get_power_status.side_effect = None
+    freezer.tick(SCAN_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.state == STATE_ON
+
+    # The successful update reset the skipped updates counter
+    mock_braviatv_client.get_power_status.side_effect = BraviaNotFound
     freezer.tick(SCAN_INTERVAL)
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
