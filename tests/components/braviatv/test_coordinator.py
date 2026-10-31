@@ -1,132 +1,297 @@
 """Test the BraviaTV coordinator."""
 
-from datetime import UTC, datetime
+from datetime import timedelta
 from unittest.mock import AsyncMock
 
+from freezegun.api import FrozenDateTimeFactory
+from pybravia import (
+    BraviaConnectionError,
+    BraviaConnectionTimeout,
+    BraviaError,
+    BraviaNotFound,
+    BraviaTurnedOff,
+)
 import pytest
-from pytest_homeassistant.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry, async_fire_time_changed
+from pytest_homeassistant.typing import WebSocketGenerator
 
-from homeassistant.components.braviatv.const import CONF_USE_PSK, DOMAIN, SourceType
-from homeassistant.components.braviatv.coordinator import BraviaTVCoordinator
-from homeassistant.components.media_player import MediaType
-from homeassistant.const import CONF_HOST, CONF_MAC, CONF_PIN
+from homeassistant.components.braviatv.const import (
+    CONF_NICKNAME,
+    CONF_USE_PSK,
+    DOMAIN,
+    LEGACY_CLIENT_ID,
+    NICKNAME_PREFIX,
+)
+from homeassistant.components.braviatv.coordinator import SCAN_INTERVAL
+from homeassistant.components.media_player import ATTR_INPUT_SOURCE_LIST
+from homeassistant.const import (
+    CONF_CLIENT_ID,
+    CONF_HOST,
+    CONF_MAC,
+    CONF_PIN,
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+)
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
+
+from . import init_integration
+
+ENTITY_ID = "media_player.bravia_tv_model"
 
 
 @pytest.mark.parametrize(
-    "start_datetime",
+    ("extra_data", "client_id", "nickname"),
     [
-        "2026-08-22T12:00:00",  # naive, treated as local time (CEST UTC+2)
-        "2026-08-22T12:00:00+02:00",  # aware
+        (
+            {CONF_CLIENT_ID: "client-id", CONF_NICKNAME: "nickname"},
+            "client-id",
+            "nickname",
+        ),
+        ({}, LEGACY_CLIENT_ID, NICKNAME_PREFIX),
     ],
 )
-@pytest.mark.freeze_time("2026-08-22T12:00:00+00:00")
-async def test_async_update_playing(
+async def test_connect_with_pin(
     hass: HomeAssistant,
-    start_datetime: str,
+    mock_braviatv_client: AsyncMock,
+    extra_data: dict[str, str],
+    client_id: str,
+    nickname: str,
 ) -> None:
-    """Test updating playing info with a start datetime."""
-    await hass.config.async_set_time_zone("Europe/Warsaw")
-    config_entry = MockConfigEntry(
+    """Test connecting with a PIN."""
+    entry = MockConfigEntry(
         domain=DOMAIN,
+        title="BRAVIA TV-Model",
+        unique_id="very_unique_string",
         data={
-            CONF_HOST: "localhost",
+            CONF_HOST: "bravia-host",
             CONF_MAC: "AA:BB:CC:DD:EE:FF",
-            CONF_USE_PSK: True,
-            CONF_PIN: "12345qwerty",
+            CONF_PIN: "1234",
+            CONF_USE_PSK: False,
+            **extra_data,
         },
     )
-    client = AsyncMock()
-    client.get_playing_info.return_value = {"startDateTime": start_datetime}
-    coordinator = BraviaTVCoordinator(hass, config_entry, client)
 
-    await coordinator.async_update_playing()
+    await init_integration(hass, entry)
 
-    assert coordinator.media_position == 7200
-    assert coordinator.media_position_updated_at == datetime(
-        2026, 8, 22, 12, 0, 0, tzinfo=UTC
+    mock_braviatv_client.connect.assert_called_once_with(
+        pin="1234", clientid=client_id, nickname=nickname
     )
 
 
-async def test_async_source_find_not_found(hass: HomeAssistant) -> None:
-    """Test finding a source that does not exist raises a validation error."""
-    config_entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            CONF_HOST: "localhost",
-            CONF_MAC: "AA:BB:CC:DD:EE:FF",
-            CONF_USE_PSK: True,
-            CONF_PIN: "12345qwerty",
-        },
-    )
-    client = AsyncMock()
-    coordinator = BraviaTVCoordinator(hass, config_entry, client)
-    coordinator.source_map = {
-        "extInput:hdmi?port=1": {
-            "uri": "extInput:hdmi?port=1",
-            "title": "HDMI 1",
-            "type": SourceType.INPUT,
+async def test_connect_with_psk_once(
+    hass: HomeAssistant,
+    mock_braviatv_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Test connecting with a PSK only once while the connection is kept."""
+    await init_integration(hass, mock_config_entry)
+
+    freezer.tick(SCAN_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert mock_braviatv_client.get_power_status.call_count == 2
+    mock_braviatv_client.connect.assert_called_once_with(psk="12345qwerty")
+
+
+async def test_standby(
+    hass: HomeAssistant,
+    mock_braviatv_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Test the update interval and fetched data follow the power status."""
+    mock_braviatv_client.get_power_status.return_value = "standby"
+    await init_integration(hass, mock_config_entry)
+
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.state == STATE_OFF
+    mock_braviatv_client.get_volume_info.assert_not_called()
+    mock_braviatv_client.get_playing_info.assert_not_called()
+
+    freezer.tick(SCAN_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert mock_braviatv_client.get_power_status.call_count == 1
+
+    mock_braviatv_client.get_power_status.return_value = "active"
+    freezer.tick(timedelta(seconds=110))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert mock_braviatv_client.get_power_status.call_count == 2
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.state == STATE_ON
+    mock_braviatv_client.get_volume_info.assert_called_once()
+    mock_braviatv_client.get_playing_info.assert_called_once()
+
+    freezer.tick(SCAN_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert mock_braviatv_client.get_power_status.call_count == 3
+
+
+async def test_api_reloading(
+    hass: HomeAssistant,
+    mock_braviatv_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Test updates are skipped while the API service reloads, then fail."""
+    await init_integration(hass, mock_config_entry)
+    mock_braviatv_client.get_power_status.side_effect = BraviaNotFound
+
+    for _ in range(10):
+        freezer.tick(SCAN_INTERVAL)
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.state == STATE_ON
+    # Every skipped update drops the connection, so the following ones reconnect
+    assert mock_braviatv_client.connect.call_count == 10
+
+    freezer.tick(SCAN_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.state == STATE_UNAVAILABLE
+
+    mock_braviatv_client.get_power_status.side_effect = None
+    freezer.tick(SCAN_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.state == STATE_ON
+
+
+@pytest.mark.parametrize(
+    "exception", [BraviaConnectionError, BraviaConnectionTimeout, BraviaTurnedOff]
+)
+async def test_tv_turned_off(
+    hass: HomeAssistant,
+    mock_braviatv_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    exception: type[Exception],
+) -> None:
+    """Test the TV is reported off when it is unreachable."""
+    await init_integration(hass, mock_config_entry)
+    mock_braviatv_client.get_power_status.side_effect = exception
+
+    freezer.tick(SCAN_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.state == STATE_OFF
+
+    mock_braviatv_client.get_power_status.side_effect = None
+    freezer.tick(SCAN_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert mock_braviatv_client.connect.call_count == 2
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.state == STATE_ON
+
+
+async def test_update_error(
+    hass: HomeAssistant,
+    mock_braviatv_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Test a generic error makes entities unavailable until the next update."""
+    await init_integration(hass, mock_config_entry)
+    mock_braviatv_client.get_power_status.side_effect = BraviaError
+
+    freezer.tick(SCAN_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.state == STATE_UNAVAILABLE
+
+    mock_braviatv_client.get_power_status.side_effect = None
+    freezer.tick(SCAN_INTERVAL)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert mock_braviatv_client.connect.call_count == 2
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.state == STATE_ON
+
+
+async def test_source_list_skips_invalid_items(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    mock_braviatv_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test updating sources skips incomplete items and duplicates."""
+    mock_braviatv_client.get_external_status.return_value = [
+        {"uri": "extInput:hdmi?port=1", "title": "HDMI 1"},
+        {"uri": "extInput:hdmi?port=2", "title": "HDMI 1"},
+        {"uri": "extInput:hdmi?port=3", "title": ""},
+        {"title": "HDMI 4"},
+    ]
+    mock_braviatv_client.get_app_list.return_value = [
+        {"uri": "com.sony.dtv.youtube", "title": "YouTube"},
+        {"uri": "com.sony.dtv.netflix", "title": "Netflix"},
+        {"title": "Broken"},
+    ]
+    mock_braviatv_client.get_content_list_all.return_value = [
+        {"uri": "tv:dvbt?srvName=TVP1", "title": "TVP 1", "dispNum": "001"},
+        {"uri": "tv:dvbt?srvName=None"},
+    ]
+    await init_integration(hass, mock_config_entry)
+    client = await hass_ws_client(hass)
+
+    state = hass.states.get(ENTITY_ID)
+    assert state
+    assert state.attributes[ATTR_INPUT_SOURCE_LIST] == ["HDMI 1"]
+
+    await client.send_json_auto_id(
+        {
+            "type": "media_player/browse_media",
+            "entity_id": ENTITY_ID,
+            "media_content_type": "apps",
+            "media_content_id": "apps",
         }
-    }
-
-    with pytest.raises(ServiceValidationError) as exc_info:
-        await coordinator.async_source_find("HDMI 9", SourceType.INPUT)
-
-    assert exc_info.value.translation_key == "source_not_found"
-    assert exc_info.value.translation_placeholders == {
-        "device": "Mock Title",
-        "source_type": "input",
-        "query": "HDMI 9",
-    }
-    client.set_play_content.assert_not_called()
-
-
-async def test_async_play_media_invalid_media_type(hass: HomeAssistant) -> None:
-    """Test playing an unsupported media type raises a validation error."""
-    config_entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            CONF_HOST: "localhost",
-            CONF_MAC: "AA:BB:CC:DD:EE:FF",
-            CONF_USE_PSK: True,
-            CONF_PIN: "12345qwerty",
-        },
     )
-    client = AsyncMock()
-    coordinator = BraviaTVCoordinator(hass, config_entry, client)
+    response = await client.receive_json()
+    assert response["success"]
+    assert [child["media_content_id"] for child in response["result"]["children"]] == [
+        "com.sony.dtv.netflix",
+        "com.sony.dtv.youtube",
+    ]
 
-    with pytest.raises(ServiceValidationError) as exc_info:
-        await coordinator.async_play_media(MediaType.MUSIC, "something")
-
-    assert exc_info.value.translation_key == "invalid_media_type"
-    assert exc_info.value.translation_placeholders == {
-        "device": "Mock Title",
-        "media_type": "music",
-    }
-
-
-async def test_async_send_command_unsupported(hass: HomeAssistant) -> None:
-    """Test sending an unsupported command raises a validation error."""
-    config_entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            CONF_HOST: "localhost",
-            CONF_MAC: "AA:BB:CC:DD:EE:FF",
-            CONF_USE_PSK: True,
-            CONF_PIN: "12345qwerty",
-        },
+    await client.send_json_auto_id(
+        {
+            "type": "media_player/browse_media",
+            "entity_id": ENTITY_ID,
+            "media_content_type": "channels",
+            "media_content_id": "channels",
+        }
     )
-    client = AsyncMock()
-    client.send_command.return_value = False
-    coordinator = BraviaTVCoordinator(hass, config_entry, client)
-
-    with pytest.raises(ServiceValidationError) as exc_info:
-        await coordinator.async_send_command(["Foo", "Bar"], 2)
-
-    assert exc_info.value.translation_key == "unsupported_command"
-    assert exc_info.value.translation_placeholders == {
-        "device": "Mock Title",
-        "command": "Foo",
-    }
-    client.send_command.assert_called_once_with("Foo")
+    response = await client.receive_json()
+    assert response["success"]
+    assert [child["media_content_id"] for child in response["result"]["children"]] == [
+        "tv:dvbt?srvName=TVP1"
+    ]
