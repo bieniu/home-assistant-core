@@ -8,7 +8,7 @@ from aiotractive.exceptions import TractiveError
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -56,11 +56,26 @@ async def async_setup_entry(
     """Set up Tractive switches."""
     coordinator = entry.runtime_data
 
-    async_add_entities(
-        TractiveSwitch(coordinator, trackable, description)
-        for description in SWITCH_TYPES
-        for trackable in coordinator.trackables
-    )
+    known_pet_ids: set[str] = set()
+
+    @callback
+    def _async_add_new_trackables() -> None:
+        new_trackables = [
+            trackable
+            for trackable in coordinator.trackables
+            if trackable.pet_id not in known_pet_ids
+        ]
+        if not new_trackables:
+            return
+        known_pet_ids.update(trackable.pet_id for trackable in new_trackables)
+        async_add_entities(
+            TractiveSwitch(coordinator, trackable, description)
+            for description in SWITCH_TYPES
+            for trackable in new_trackables
+        )
+
+    _async_add_new_trackables()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_trackables))
 
 
 class TractiveSwitch(TractiveEntity, SwitchEntity):
