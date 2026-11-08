@@ -5,7 +5,7 @@ import aiotractive
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import CLIENT_ID, DOMAIN
@@ -30,21 +30,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: TractiveConfigEntry) -> 
     coordinator = TractiveCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
-
-    # Register the tracker devices so entities on the pet devices can resolve
-    # their via_device link at construction time.
-    device_registry = dr.async_get(hass)
-    for trackable in coordinator.trackables:
-        device_registry.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            configuration_url="https://my.tractive.com/",
-            identifiers={(DOMAIN, trackable.tracker_id)},
-            translation_key="tracker",
-            translation_placeholders={"id": trackable.tracker_id},
-            manufacturer="Tractive GmbH",
-            sw_version=trackable.tracker_details["fw_version"],
-            model_id=trackable.tracker_details["model_number"],
-        )
 
     entry.async_create_background_task(hass, client.listen(), "tractive_listen")
 

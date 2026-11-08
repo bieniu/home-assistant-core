@@ -12,7 +12,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntityDescription,
 )
 from homeassistant.const import ATTR_BATTERY_CHARGING, EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import ATTR_POWER_SAVING
@@ -76,9 +76,24 @@ async def async_setup_entry(
     """Set up Tractive binary sensors."""
     coordinator = entry.runtime_data
 
-    async_add_entities(
-        TractiveBinarySensor(coordinator, trackable, description)
-        for description in SENSOR_TYPES
-        for trackable in coordinator.trackables
-        if description.supported(trackable.tracker_details)
-    )
+    known_pet_ids: set[str] = set()
+
+    @callback
+    def _async_add_new_trackables() -> None:
+        new_trackables = [
+            trackable
+            for trackable in coordinator.trackables
+            if trackable.pet_id not in known_pet_ids
+        ]
+        if not new_trackables:
+            return
+        known_pet_ids.update(trackable.pet_id for trackable in new_trackables)
+        async_add_entities(
+            TractiveBinarySensor(coordinator, trackable, description)
+            for description in SENSOR_TYPES
+            for trackable in new_trackables
+            if description.supported(trackable.tracker_details)
+        )
+
+    _async_add_new_trackables()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_trackables))

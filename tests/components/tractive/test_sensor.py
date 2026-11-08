@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from aiotractive import PetStatus
 from pytest_homeassistant.common import MockConfigEntry, snapshot_platform
 from syrupy.assertion import SnapshotAssertion
 
@@ -12,6 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from . import init_integration
+from .conftest import PET_ID
 
 
 async def test_sensor(
@@ -152,6 +154,7 @@ async def test_sensor_without_health_data(
 ) -> None:
     """Test health sensors are not created for a pet without health data."""
     mock_tractive_client.async_fetch_trackables.return_value[0].health_available = False
+    mock_tractive_client.status.pets[PET_ID] = PetStatus(weight=23700)
 
     with patch("homeassistant.components.tractive.PLATFORMS", [Platform.SENSOR]):
         await init_integration(hass, mock_config_entry)
