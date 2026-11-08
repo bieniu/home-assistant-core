@@ -18,7 +18,7 @@ from homeassistant.const import (
     UnitOfMass,
     UnitOfTime,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
@@ -146,6 +146,18 @@ SENSOR_TYPES: tuple[TractiveSensorEntityDescription, ...] = (
 )
 
 
+def _is_supported(
+    coordinator: TractiveCoordinator,
+    trackable: Trackable,
+    description: TractiveSensorEntityDescription,
+) -> bool:
+    """Return if the sensor is supported, health sensors once health data arrives."""
+    if not description.health_sensor or trackable.health_available:
+        return True
+    pet_status = coordinator.data.pets.get(trackable.pet_id)
+    return getattr(pet_status, description.key, None) is not None
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: TractiveConfigEntry,
@@ -154,9 +166,27 @@ async def async_setup_entry(
     """Set up Tractive sensors."""
     coordinator = entry.runtime_data
 
-    async_add_entities(
-        TractiveSensor(coordinator, trackable, description)
-        for description in SENSOR_TYPES
-        for trackable in coordinator.trackables
-        if not description.health_sensor or trackable.health_available
-    )
+    known_sensors: set[tuple[str, str]] = set()
+
+    @callback
+    def _async_add_new_sensors() -> None:
+        new_sensors = [
+            (trackable, description)
+            for trackable in coordinator.trackables
+            for description in SENSOR_TYPES
+            if (trackable.pet_id, description.key) not in known_sensors
+            and _is_supported(coordinator, trackable, description)
+        ]
+        if not new_sensors:
+            return
+        known_sensors.update(
+            (trackable.pet_id, description.key)
+            for trackable, description in new_sensors
+        )
+        async_add_entities(
+            TractiveSensor(coordinator, trackable, description)
+            for trackable, description in new_sensors
+        )
+
+    _async_add_new_sensors()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_sensors))

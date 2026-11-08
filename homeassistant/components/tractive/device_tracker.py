@@ -5,7 +5,7 @@ from typing import override
 from aiotractive import Trackable
 
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import TractiveConfigEntry, TractiveCoordinator
@@ -22,10 +22,25 @@ async def async_setup_entry(
     """Set up Tractive device trackers."""
     coordinator = entry.runtime_data
 
-    async_add_entities(
-        TractiveDeviceTracker(coordinator, trackable)
-        for trackable in coordinator.trackables
-    )
+    known_pet_ids: set[str] = set()
+
+    @callback
+    def _async_add_new_trackables() -> None:
+        new_trackables = [
+            trackable
+            for trackable in coordinator.trackables
+            if trackable.pet_id not in known_pet_ids
+        ]
+        if not new_trackables:
+            return
+        known_pet_ids.update(trackable.pet_id for trackable in new_trackables)
+        async_add_entities(
+            TractiveDeviceTracker(coordinator, trackable)
+            for trackable in new_trackables
+        )
+
+    _async_add_new_trackables()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_trackables))
 
 
 class TractiveDeviceTracker(TractiveEntity, TrackerEntity):
