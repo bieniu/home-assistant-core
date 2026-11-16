@@ -3,7 +3,7 @@
 from ipaddress import ip_address
 from unittest.mock import AsyncMock
 
-from brother import SnmpError, UnsupportedModelError
+from brother import SnmpError, SnmpTimeoutError, UnsupportedModelError
 import pytest
 from pytest_homeassistant.common import MockConfigEntry
 
@@ -101,6 +101,7 @@ async def test_invalid_hostname(
     [
         (ConnectionError, "cannot_connect"),
         (TimeoutError, "cannot_connect"),
+        (SnmpTimeoutError("timeout"), "cannot_connect"),
         (SnmpError("SNMP error"), "snmp_error"),
     ],
 )
@@ -187,7 +188,10 @@ async def test_device_exists_abort(
     assert result["reason"] == "already_configured"
 
 
-@pytest.mark.parametrize("exc", [ConnectionError, TimeoutError, SnmpError("error")])
+@pytest.mark.parametrize(
+    "exc",
+    [ConnectionError, TimeoutError, SnmpTimeoutError("timeout"), SnmpError("error")],
+)
 async def test_zeroconf_exception(
     hass: HomeAssistant, exc: Exception, mock_brother_client: AsyncMock
 ) -> None:
@@ -366,6 +370,7 @@ async def test_reconfigure_successful(
     [
         (ConnectionError, "cannot_connect"),
         (TimeoutError, "cannot_connect"),
+        (SnmpTimeoutError("timeout"), "cannot_connect"),
         (SnmpError("error"), "snmp_error"),
     ],
 )

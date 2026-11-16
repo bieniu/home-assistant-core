@@ -3,7 +3,7 @@
 import logging
 from unittest.mock import AsyncMock
 
-from brother import SnmpError, UnsupportedModelError
+from brother import SnmpError, SnmpTimeoutError, UnsupportedModelError
 from freezegun.api import FrozenDateTimeFactory
 import pytest
 from pytest_homeassistant.common import MockConfigEntry, async_fire_time_changed
@@ -66,6 +66,7 @@ async def test_error_on_init(
     [
         (ConnectionError, logging.INFO),
         (TimeoutError, logging.INFO),
+        (SnmpTimeoutError("timeout"), logging.INFO),
         (SnmpError("SNMP Error"), logging.ERROR),
         (UnsupportedModelError("error"), logging.ERROR),
     ],
