@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from . import init_integration
+from .conftest import PET_ID, TRACKER_ID
 
 BATTERY_ENTITY_ID = "sensor.tracker_device_id_123_battery"
 ACTIVITY_ENTITY_ID = "sensor.test_pet_activity_time"
@@ -337,3 +338,99 @@ async def test_new_trackable_fetch_unauthorized(
     flows = hass.config_entries.flow.async_progress()
     assert len(flows) == 1
     assert flows[0]["context"]["source"] == SOURCE_REAUTH
+
+
+async def test_stale_devices_removed_on_setup(
+    hass: HomeAssistant,
+    mock_tractive_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+    device_registry: dr.DeviceRegistry,
+) -> None:
+    """Test devices of pets and trackers gone from the account are removed."""
+    mock_config_entry.add_to_hass(hass)
+    for identifier in (NEW_TRACKER_ID, NEW_PET_ID):
+        device_registry.async_get_or_create(
+            config_entry_id=mock_config_entry.entry_id,
+            identifiers={(DOMAIN, identifier)},
+        )
+
+    await init_integration(hass, mock_config_entry)
+
+    assert {
+        identifier
+        for device in dr.async_entries_for_config_entry(
+            device_registry, mock_config_entry.entry_id
+        )
+        for identifier in device.identifiers
+    } == {(DOMAIN, TRACKER_ID), (DOMAIN, PET_ID)}
+
+
+@pytest.mark.parametrize(
+    ("pet_id", "battery_entity_id"),
+    [
+        # The entity ID is restored when the same pet gets a new tracker
+        (PET_ID, BATTERY_ENTITY_ID),
+        (NEW_PET_ID, NEW_BATTERY_ENTITY_ID),
+    ],
+)
+async def test_stale_devices_removed_on_new_tracker(
+    hass: HomeAssistant,
+    mock_tractive_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+    device_registry: dr.DeviceRegistry,
+    pet_id: str,
+    battery_entity_id: str,
+) -> None:
+    """Test stale devices are removed when a tracker or a pet is replaced."""
+    await init_integration(hass, mock_config_entry)
+
+    existing = mock_tractive_client.async_fetch_trackables.return_value[0]
+    mock_tractive_client.async_fetch_trackables.return_value = [
+        Trackable(
+            pet_id=pet_id,
+            tracker_id=NEW_TRACKER_ID,
+            pet_details={**existing.pet_details, "_id": pet_id},
+            tracker_details={**existing.tracker_details, "_id": NEW_TRACKER_ID},
+        )
+    ]
+    mock_tractive_client.status.trackers[NEW_TRACKER_ID] = TrackerStatus(
+        battery_level=50
+    )
+    mock_tractive_client.send_error_event(None)
+    await hass.async_block_till_done()
+
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+    assert {
+        identifier
+        for device in dr.async_entries_for_config_entry(
+            device_registry, mock_config_entry.entry_id
+        )
+        for identifier in device.identifiers
+    } == {(DOMAIN, NEW_TRACKER_ID), (DOMAIN, pet_id)}
+    assert hass.states.get(battery_entity_id).state == "50"
+
+
+async def test_new_trackables_fetched_after_unload(
+    hass: HomeAssistant,
+    mock_tractive_client: AsyncMock,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test a fetch that finishes after the unload does not reload the entry."""
+    await init_integration(hass, mock_config_entry)
+
+    fetched = hass.loop.create_future()
+
+    async def fetch_trackables() -> list[Trackable]:
+        await fetched
+        return []
+
+    mock_tractive_client.async_fetch_trackables.side_effect = fetch_trackables
+    mock_tractive_client.status.trackers[NEW_TRACKER_ID] = TrackerStatus()
+    mock_tractive_client.send_error_event(None)
+    await hass.async_block_till_done()
+
+    assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    fetched.set_result(None)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert mock_config_entry.state is ConfigEntryState.NOT_LOADED

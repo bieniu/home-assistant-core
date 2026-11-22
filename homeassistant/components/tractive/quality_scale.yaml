@@ -74,7 +74,7 @@ rules:
   repair-issues:
     status: exempt
     comment: Integration doesn't create repair issues.
-  stale-devices: todo
+  stale-devices: done
 
   # Platinum
   async-dependency: done

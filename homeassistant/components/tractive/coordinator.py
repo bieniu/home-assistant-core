@@ -69,6 +69,7 @@ class TractiveCoordinator(DataUpdateCoordinator[TractiveStatus]):
                 translation_key="communication_error",
                 translation_placeholders={"error": str(error)},
             ) from error
+        self._async_remove_stale_devices()
         self._async_register_devices(self.trackables)
         self._checked_tracker_ids = {t.tracker_id for t in self.trackables}
         self.client.subscribe_updates(self._async_handle_update)
@@ -120,6 +121,21 @@ class TractiveCoordinator(DataUpdateCoordinator[TractiveStatus]):
             )
 
     @callback
+    def _async_remove_stale_devices(self) -> None:
+        """Remove the devices of pets and trackers that are gone from the account."""
+        device_registry = dr.async_get(self.hass)
+        current_identifiers = {
+            (DOMAIN, device_id)
+            for trackable in self.trackables
+            for device_id in (trackable.pet_id, trackable.tracker_id)
+        }
+        for device in dr.async_entries_for_config_entry(
+            device_registry, self.config_entry.entry_id
+        ):
+            if not device.identifiers & current_identifiers:
+                device_registry.async_remove_device(device.id)
+
+    @callback
     def _async_check_new_trackers(self) -> None:
         """Fetch the trackables when a push update reports an unknown tracker."""
         if not (
@@ -141,6 +157,15 @@ class TractiveCoordinator(DataUpdateCoordinator[TractiveStatus]):
             _LOGGER.warning("Failed to fetch new Tractive trackables: %s", error)
             # Retry on a later push update, rate limited by the debouncer
             self._checked_tracker_ids = {t.tracker_id for t in self.trackables}
+            return
+        if self._shutdown_requested:
+            return
+        if {(t.pet_id, t.tracker_id) for t in self.trackables} - {
+            (t.pet_id, t.tracker_id) for t in trackables
+        }:
+            # A pet is gone or its tracker was replaced, the setup removes the
+            # stale devices
+            self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
             return
         known_pet_ids = {t.pet_id for t in self.trackables}
         self.trackables = trackables
